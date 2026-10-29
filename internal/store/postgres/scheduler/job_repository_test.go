@@ -34,7 +34,7 @@ func TestPostgresJobRepository(t *testing.T) {
 
 	t.Run("GetAll", func(t *testing.T) {
 		t.Run("get all jobs for a given project name", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobs := addJobs(ctx, t, db)
 
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
@@ -66,7 +66,7 @@ func TestPostgresJobRepository(t *testing.T) {
 		})
 
 		t.Run("return not found error when jobs not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 			allJobs, err := jobProviderRepo.GetAll(ctx, "some-other-project-1")
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
@@ -76,7 +76,7 @@ func TestPostgresJobRepository(t *testing.T) {
 
 	t.Run("GetJobDetails", func(t *testing.T) {
 		t.Run("gets one job with details", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobs := addJobs(ctx, t, db)
 
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
@@ -86,7 +86,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.True(t, compareEqualJobWithDetails(jobs[jobAName], jobWithDetails))
 		})
 		t.Run("returns not found error when job not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 			jobObject, err := jobProviderRepo.GetJobDetails(ctx, tnnt.ProjectName(), "some-other-job")
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
@@ -95,7 +95,7 @@ func TestPostgresJobRepository(t *testing.T) {
 	})
 	t.Run("GetJob", func(t *testing.T) {
 		t.Run("returns one job", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobs := addJobs(ctx, t, db)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 
@@ -104,7 +104,7 @@ func TestPostgresJobRepository(t *testing.T) {
 			assert.True(t, compareEqualJob(jobs[jobAName], jobObject))
 		})
 		t.Run("returns not found error when job not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 			jobObject, err := jobProviderRepo.GetJob(ctx, tnnt.ProjectName(), "some-other-job")
 			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
@@ -113,7 +113,7 @@ func TestPostgresJobRepository(t *testing.T) {
 	})
 	t.Run("GetJobs", func(t *testing.T) {
 		t.Run("returns multiple job", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobs := addJobs(ctx, t, db)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 
@@ -125,14 +125,14 @@ func TestPostgresJobRepository(t *testing.T) {
 			}
 		})
 		t.Run("returns not found error when jobs are not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 			jobObject, err := jobProviderRepo.GetJobs(ctx, tnnt.ProjectName(), []string{"some-other-job"})
 			assert.ErrorContains(t, err, "unable to find job")
 			assert.Nil(t, jobObject)
 		})
 		t.Run("returns the found job when some other job is not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobs := addJobs(ctx, t, db)
 			jobProviderRepo := postgres.NewJobProviderRepository(db)
 			jobObjects, err := jobProviderRepo.GetJobs(ctx, tnnt.ProjectName(), []string{jobAName, "some-other-job"})
@@ -145,8 +145,7 @@ func TestPostgresJobRepository(t *testing.T) {
 	})
 }
 
-func dbSetup() *pgxpool.Pool {
-	ctx := context.Background()
+func dbSetup(ctx context.Context) *pgxpool.Pool {
 	pool := setup.TestPool()
 	setup.TruncateTablesWith(ctx, pool)
 	return pool

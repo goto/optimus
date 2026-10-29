@@ -1,11 +1,12 @@
-package alertmanager
+package alertmanager //nolint:testpackage
 
 import (
 	"testing"
 	"time"
 
-	"github.com/goto/optimus/core/scheduler"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/goto/optimus/core/scheduler"
 )
 
 func TestBuildRootCauseBreachPayload(t *testing.T) {

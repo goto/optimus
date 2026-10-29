@@ -124,8 +124,6 @@ func (m *mockProjectTeamGetter) Get(ctx context.Context, projectName tenant.Proj
 	return nil, args.Error(1)
 }
 
-func rcDurPtr(d time.Duration) *time.Duration { return &d }
-
 func rcTestTenant(project string) tenant.Tenant {
 	tnnt, err := tenant.NewTenant(project, "ns1")
 	if err != nil {
@@ -137,7 +135,13 @@ func rcTestTenant(project string) tenant.Tenant {
 func rcPtr(t time.Time) *time.Time { return &t }
 
 // rcMakeRun builds a JobRunSummary the way the resolver does: SLATime = scheduled_at + SLA.
-func rcMakeRun(jobName scheduler.JobName, scheduledAt time.Time, sla time.Duration, taskStart, taskEnd *time.Time, status string) *scheduler.JobRunSummary {
+func rcMakeRun(
+	jobName scheduler.JobName,
+	scheduledAt time.Time,
+	sla time.Duration, //nolint:unparam
+	taskStart, taskEnd *time.Time,
+	status string,
+) *scheduler.JobRunSummary {
 	slaTime := scheduledAt.Add(sla)
 	return &scheduler.JobRunSummary{
 		JobName:       jobName,
@@ -205,7 +209,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 	lineage := rcMakeLineage("job_target", tnnt, targetRun,
 		rcMakeLineage("job_upstream", tnnt, upstreamRun))
 
-	newEstimator := func(t *testing.T, durations map[string]time.Duration) *mockRootCauseDurationEstimator {
+	newEstimator := func(_ *testing.T, durations map[string]time.Duration) *mockRootCauseDurationEstimator {
 		estimator := &mockRootCauseDurationEstimator{}
 		durationsByJob := map[scheduler.JobName]*time.Duration{}
 		for jobName, duration := range durations {

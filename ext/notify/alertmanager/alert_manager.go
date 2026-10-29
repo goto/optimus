@@ -205,7 +205,7 @@ func (a *AlertManager) logEvent(ctx context.Context, e *AlertPayload) (uuid.UUID
 
 // countRootCauseAlert increments a root-cause alert outcome counter; payloads of other
 // alert types are ignored. The reason label comes from the payload data.
-func (a *AlertManager) countRootCauseAlert(alert *AlertPayload, counter *prometheus.CounterVec, labelValues ...string) {
+func (*AlertManager) countRootCauseAlert(alert *AlertPayload, counter *prometheus.CounterVec, labelValues ...string) {
 	if alert.AlertType != AlertTypeRootCauseBreach {
 		return
 	}

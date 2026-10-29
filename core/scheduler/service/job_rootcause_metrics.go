@@ -22,7 +22,7 @@ var (
 
 // recordEvaluation counts one publisher tick: errored when the batch failed, empty when it
 // found nothing, successful otherwise.
-func (s *JobRootCauseService) recordEvaluation(errored bool, incidentCount int) {
+func (*JobRootCauseService) recordEvaluation(errored bool, incidentCount int) {
 	switch {
 	case errored:
 		rootCauseEvaluationsTotal.WithLabelValues("errored").Inc()

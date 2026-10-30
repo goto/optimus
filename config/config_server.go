@@ -232,10 +232,11 @@ type PublisherKafkaConfig struct {
 }
 
 type FeaturesConfig struct {
-	EnableV2Sensor                    bool `mapstructure:"enable_v2_sensor"`
-	EnableV3Sensor                    bool `mapstructure:"enable_v3_sensor"`
-	EnableIgnoreOldScheduleRunsSensor bool `mapstructure:"enable_ignore_old_schedule_runs_sensor"`
-	EnableTableCommentWithMetadata    bool `mapstructure:"enable_table_comment_with_metadata"`
+	EnableV2Sensor                        bool `mapstructure:"enable_v2_sensor"`
+	EnableV3Sensor                        bool `mapstructure:"enable_v3_sensor"`
+	EnableIgnoreOldScheduleRunsSensor     bool `mapstructure:"enable_ignore_old_schedule_runs_sensor"`
+	EnableTableCommentWithMetadata        bool `mapstructure:"enable_table_comment_with_metadata"`
+	EnableDexUseYesterdayCompletenessOnly bool `mapstructure:"enable_dex_use_yesterday_completeness_only"`
 }
 
 type JobValidationConfig struct {

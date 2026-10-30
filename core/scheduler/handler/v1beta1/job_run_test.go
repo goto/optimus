@@ -37,7 +37,7 @@ func TestJobRunHandler(t *testing.T) {
 
 	t.Run("GetJobRun", func(t *testing.T) {
 		t.Run("should return error if project name is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "",
 				JobName:     "job1",
@@ -52,7 +52,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should return error if job name is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "",
@@ -67,7 +67,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should return error if state is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -93,7 +93,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(jobRuns, nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -126,7 +126,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(jobRuns, fmt.Errorf("service error"))
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.GetJobRunsRequest{
 				ProjectName: "proj",
 				JobName:     "job1",
@@ -144,7 +144,7 @@ func TestJobRunHandler(t *testing.T) {
 	t.Run("JobRunInput", func(t *testing.T) {
 		t.Run("returns error when project name is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "",
@@ -162,7 +162,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when job name is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -180,7 +180,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when executor is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -198,7 +198,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when scheduled_at is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -215,7 +215,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 		t.Run("returns error when run config is invalid", func(t *testing.T) {
 			service := new(mockJobRunService)
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -237,7 +237,7 @@ func TestJobRunHandler(t *testing.T) {
 				Return(&scheduler.ExecutorInput{}, fmt.Errorf("error in service"))
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -263,7 +263,7 @@ func TestJobRunHandler(t *testing.T) {
 				}, nil)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 
 			inputRequest := pb.JobRunInputRequest{
 				ProjectName:  "proj",
@@ -327,7 +327,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService, nil, false)
 
 			req := &pb.GetThirdPartySensorRequest{
 				ThirdPartyType: upstreamResolverType.String(),
@@ -375,7 +375,7 @@ func TestJobRunHandler(t *testing.T) {
 			dexIntervalEnd := jakMidnight.Add(-1 * time.Minute)
 
 			thirdPartyClient := new(mockThirdPartyClient)
-			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp, nil)
+			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp)
 			defer thirdPartyClient.AssertExpectations(t)
 
 			upstreamResolverType := config.DexUpstreamResolver
@@ -393,7 +393,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).Return(dataInterval, nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService, nil, false)
 
 			req := &pb.GetThirdPartySensorRequest{
 				ThirdPartyType: upstreamResolverType.String(),
@@ -413,6 +413,88 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Equal(t, dexResp.IsComplete, resp.GetDexSensorResponse().IsComplete)
 			for _, completeness := range resp.GetDexSensorResponse().Log {
 				assert.Equal(t, true, completeness.IsComplete)
+			}
+		})
+		t.Run("when enableDexUseYesterdayCompletenessOnly is true, dex receives a single-day window at scheduled_at minus 24h", func(t *testing.T) {
+			jobScheduleTime := time.Date(2025, time.April, 25, 10, 0, 0, 0, time.UTC)
+
+			resourceURN, err := resource.NewURN("maxcompute", "project.dataset.table_name")
+			assert.Nil(t, err)
+
+			dexResp := &scheduler.DataCompletenessStatus{
+				IsComplete: true,
+				DataCompletenessByDate: []*scheduler.DataCompletenessByDate{
+					{
+						Date:       jobScheduleTime.In(jakartaLoc).Add(-24 * time.Hour),
+						IsComplete: true,
+					},
+				},
+			}
+
+			upstreamResolverType := config.DexUpstreamResolver
+
+			cases := []struct {
+				name              string
+				intervalStartDelta time.Duration
+				intervalEndDelta   time.Duration
+			}{
+				{
+					name:              "hourly interval within the same calendar day",
+					intervalStartDelta: -1 * time.Hour,
+					intervalEndDelta:   0,
+				},
+				{
+					name:              "interval spans a single day",
+					intervalStartDelta: -24 * time.Hour,
+					intervalEndDelta:   0,
+				},
+				{
+					name:              "interval spans multiple days",
+					intervalStartDelta: -3 * 24 * time.Hour,
+					intervalEndDelta:   0,
+				},
+			}
+
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					jobIntervalStart := jobScheduleTime.Add(tc.intervalStartDelta)
+					jobIntervalEnd := jobScheduleTime.Add(tc.intervalEndDelta)
+					dataInterval := interval.NewInterval(jobIntervalStart, jobIntervalEnd)
+
+					expectedDexTime := jobScheduleTime.In(jakartaLoc).Add(-24 * time.Hour)
+
+					thirdPartyClient := new(mockThirdPartyClient)
+					thirdPartyClient.On("IsComplete", ctx, resourceURN, expectedDexTime, expectedDexTime).
+						Return(dexResp.IsComplete, dexResp, nil)
+					defer thirdPartyClient.AssertExpectations(t)
+
+					thirdPartySensorService := new(mockThirdPartySensorService)
+					thirdPartySensorService.On("GetClient", upstreamResolverType).Return(thirdPartyClient, nil)
+					defer thirdPartySensorService.AssertExpectations(t)
+
+					jobRunService := new(mockJobRunService)
+					jobRunService.On("GetInterval", ctx, tenant.ProjectName(projectName), scheduler.JobName(jobName), jobScheduleTime).
+						Return(dataInterval, nil)
+					defer jobRunService.AssertExpectations(t)
+
+					jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, thirdPartySensorService, nil, true)
+
+					req := &pb.GetThirdPartySensorRequest{
+						ThirdPartyType: upstreamResolverType.String(),
+						ProjectName:    projectName,
+						JobName:        jobName,
+						ScheduledAt:    timestamppb.New(jobScheduleTime),
+						Payload: &pb.GetThirdPartySensorRequest_DexSensorRequest{
+							DexSensorRequest: &pb.DexSensorRequest{
+								ResourceUrn: resourceURN.String(),
+							},
+						},
+					}
+
+					resp, err := jobRunHandler.GetThirdPartySensorStatus(ctx, req)
+					assert.Nil(t, err)
+					assert.Equal(t, dexResp.IsComplete, resp.GetDexSensorResponse().IsComplete)
+				})
 			}
 		})
 	})
@@ -440,7 +522,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -485,7 +567,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(jobRuns, "", nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -523,7 +605,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobRunService.On("GetJobRuns", ctx, tenant.ProjectName(projectName), job.Name, query).Return(nil, "", fmt.Errorf("some random error"))
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 
 			req := &pb.JobRunRequest{
 				ProjectName: projectName,
@@ -537,7 +619,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should not return job runs if project name is not valid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.JobRunRequest{
 				ProjectName: "",
 				JobName:     "transform-tables",
@@ -552,7 +634,7 @@ func TestJobRunHandler(t *testing.T) {
 		})
 
 		t.Run("should not return job runs if job name is not valid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "",
@@ -566,7 +648,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 		t.Run("should not return job runs if only start date is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "jobname",
@@ -579,7 +661,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 		t.Run("should not return job runs if only end date is invalid", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			req := &pb.JobRunRequest{
 				ProjectName: "some-project",
 				JobName:     "jobname",
@@ -594,7 +676,7 @@ func TestJobRunHandler(t *testing.T) {
 	})
 	t.Run("UploadToScheduler", func(t *testing.T) {
 		t.Run("should fail deployment if project name empty", func(t *testing.T) {
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 			namespaceName := "namespace-name"
 			req := &pb.UploadToSchedulerRequest{
 				ProjectName:   "",
@@ -613,7 +695,7 @@ func TestJobRunHandler(t *testing.T) {
 			}
 			jobRunService := new(mockJobRunService)
 			jobRunService.On("UploadToScheduler", ctx, tenant.ProjectName(projectName)).Return(nil)
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
 
 			_, err := jobRunHandler.UploadToScheduler(ctx, req)
 			assert.Nil(t, err)
@@ -634,7 +716,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -658,7 +740,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -681,7 +763,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -705,7 +787,7 @@ func TestJobRunHandler(t *testing.T) {
 					Value: eventValues,
 				},
 			}
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -756,7 +838,7 @@ func TestJobRunHandler(t *testing.T) {
 			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -807,7 +889,7 @@ func TestJobRunHandler(t *testing.T) {
 			notifier.On("Relay", ctx, event).Return(nil)
 			defer jobRunService.AssertExpectations(t)
 
-			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil, nil, nil)
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, notifier, nil, nil, nil, nil, nil, false)
 
 			resp, err := jobRunHandler.RegisterJobEvent(ctx, req)
 			assert.NotNil(t, err)
@@ -822,7 +904,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "",
 				JobName:       "test_job",
@@ -840,7 +922,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "",
@@ -858,7 +940,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",
@@ -876,7 +958,7 @@ func TestJobRunHandler(t *testing.T) {
 			service := new(mockJobRunService)
 			defer service.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",
@@ -932,7 +1014,7 @@ func TestJobRunHandler(t *testing.T) {
 			assert.NotNil(t, interval)
 			assert.NoError(t, err)
 
-			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, service, nil, nil, nil, nil, nil, nil, false)
 			request := &pb.GetIntervalRequest{
 				ProjectName:   "test_project",
 				JobName:       "test_job",
@@ -955,7 +1037,7 @@ func TestJobRunHandler(t *testing.T) {
 			defer jobRunService.AssertExpectations(t)
 			defer jobLineageService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil, false)
 
 			req := &pb.GetJobRunLineageSummaryRequest{
 				TargetJobs: []*pb.TargetJobRunIdentifier{
@@ -979,7 +1061,7 @@ func TestJobRunHandler(t *testing.T) {
 			defer jobRunService.AssertExpectations(t)
 			defer jobLineageService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil, false)
 
 			req := &pb.GetJobRunLineageSummaryRequest{
 				TargetJobs: []*pb.TargetJobRunIdentifier{
@@ -1006,7 +1088,7 @@ func TestJobRunHandler(t *testing.T) {
 			defer jobRunService.AssertExpectations(t)
 			defer jobLineageService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil, false)
 
 			scheduledAt := timestamppb.Now()
 			req := &pb.GetJobRunLineageSummaryRequest{
@@ -1058,7 +1140,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobLineageService := new(mockJobLineageService)
 			defer jobLineageService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil, false)
 
 			req := &pb.GetJobRunLineageSummaryRequest{
 				TargetJobs:               []*pb.TargetJobRunIdentifier{{JobName: "test-job", ScheduledAt: timestamppb.Now()}},
@@ -1079,7 +1161,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobLineageService := new(mockJobLineageService)
 			defer jobLineageService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, jobLineageService, nil, nil, nil, false)
 
 			scheduledAt := timestamppb.Now()
 			upstreamScheduledAt := scheduledAt.AsTime().Add(-1 * time.Hour)
@@ -1131,7 +1213,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.GenerateExpectedFinishTimeRequest{
 				ProjectName:           projectName,
@@ -1152,7 +1234,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.GenerateExpectedFinishTimeRequest{
 				ProjectName:           projectName,
@@ -1180,7 +1262,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.JobExpectedCompletionTimeReportRequest{
 				ProjectNames:          []string{""},
@@ -1197,7 +1279,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.JobExpectedCompletionTimeReportRequest{
 				ProjectNames:          []string{projectName},
@@ -1218,7 +1300,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.JobExpectedCompletionTimeReportRequest{
 				ProjectNames:          []string{projectName},
@@ -1289,7 +1371,7 @@ func TestJobRunHandler(t *testing.T) {
 			jobExpectatorService := NewJobExpectatorService(t)
 			defer jobExpectatorService.AssertExpectations(t)
 
-			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService)
+			handler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, jobExpectatorService, false)
 
 			req := &pb.JobExpectedCompletionTimeReportRequest{
 				ProjectNames:          []string{projectName},

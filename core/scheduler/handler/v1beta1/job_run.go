@@ -98,6 +98,8 @@ type JobRunHandler struct {
 	thirdPartySensorService ThirdPartySensorService
 	jobExpectatorService    JobExpectatorService
 
+	enableDexUseYesterdayCompletenessOnly bool
+
 	pb.UnimplementedJobRunServiceServer
 }
 
@@ -268,14 +270,21 @@ func (h JobRunHandler) GetThirdPartySensorStatus(ctx context.Context, req *pb.Ge
 
 	startTime := intervalResp.GetStartTime().AsTime().In(getJakartaTimeZone())
 	endTime := intervalResp.GetEndTime().AsTime().In(getJakartaTimeZone())
-	logicalEndTime := getJakartaMidnightTime().Add(-1 * time.Minute)
-	if endTime.After(logicalEndTime) {
-		h.l.Info(fmt.Sprintf("resetting the third party sensor window end time to "+
-			"logical jakarta based end time: %s, job: %s", logicalEndTime.Format(time.RFC3339), jobName))
-		endTime = logicalEndTime
-	}
-	if startTime.After(endTime.Add(-24 * time.Hour)) {
-		startTime = endTime.Add(-24 * time.Hour)
+	if h.enableDexUseYesterdayCompletenessOnly {
+		// adjust end time for yesterday relative to given scheduled at (endTime will be equal to scheduled at),
+		// and start time should be aligned with the end date so dex will only return completeness for a single day
+		endTime = endTime.Add(-24 * time.Hour)
+		startTime = endTime
+	} else {
+		logicalEndTime := getJakartaMidnightTime().Add(-1 * time.Minute)
+		if endTime.After(logicalEndTime) {
+			h.l.Info(fmt.Sprintf("resetting the third party sensor window end time to "+
+				"logical jakarta based end time: %s, job: %s", logicalEndTime.Format(time.RFC3339), jobName))
+			endTime = logicalEndTime
+		}
+		if startTime.After(endTime.Add(-24 * time.Hour)) {
+			startTime = endTime.Add(-24 * time.Hour)
+		}
 	}
 
 	thirdPartyType := req.GetThirdPartyType()
@@ -720,15 +729,17 @@ func NewJobRunHandler(
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
 	jobExpectatorService JobExpectatorService,
+	enableDexUseYesterdayCompletenessOnly bool,
 ) *JobRunHandler {
 	return &JobRunHandler{
-		l:                       l,
-		service:                 service,
-		notifier:                notifier,
-		schedulerService:        schedulerService,
-		jobLineageService:       jobLineageService,
-		jobSLAPredictorService:  jobSLAPredictorService,
-		thirdPartySensorService: thirdPartySensorService,
-		jobExpectatorService:    jobExpectatorService,
+		l:                                     l,
+		service:                               service,
+		notifier:                              notifier,
+		schedulerService:                      schedulerService,
+		jobLineageService:                     jobLineageService,
+		jobSLAPredictorService:                jobSLAPredictorService,
+		thirdPartySensorService:               thirdPartySensorService,
+		jobExpectatorService:                  jobExpectatorService,
+		enableDexUseYesterdayCompletenessOnly: enableDexUseYesterdayCompletenessOnly,
 	}
 }

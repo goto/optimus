@@ -555,7 +555,7 @@ func (s *OptimusServer) setupHandlers() error {
 	pb.RegisterResourceServiceServer(s.grpcServer, rHandler.NewResourceHandler(s.logger, primaryResourceService, resourceChangeLogService))
 
 	sensorService := schedulerService.NewSensorService(s.logger, s.conf.UpstreamResolvers...)
-	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService))
+	pb.RegisterJobRunServiceServer(s.grpcServer, schedulerHandler.NewJobRunHandler(s.logger, newJobRunService, eventsService, newSchedulerService, jobLineageService, newJobSLAPredictorService, sensorService, jobExpectatorService, s.conf.Features.EnableDexUseYesterdayCompletenessOnly))
 
 	// Completeness Handler
 	if s.conf.Completeness.DatastoreProject == "" {

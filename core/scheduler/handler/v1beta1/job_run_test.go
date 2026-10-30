@@ -375,7 +375,7 @@ func TestJobRunHandler(t *testing.T) {
 			dexIntervalEnd := jakMidnight.Add(-1 * time.Minute)
 
 			thirdPartyClient := new(mockThirdPartyClient)
-			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp)
+			thirdPartyClient.On("IsComplete", ctx, resourceURN, dexIntervalStart, dexIntervalEnd).Return(dexResp.IsComplete, dexResp, nil)
 			defer thirdPartyClient.AssertExpectations(t)
 
 			upstreamResolverType := config.DexUpstreamResolver
@@ -434,22 +434,22 @@ func TestJobRunHandler(t *testing.T) {
 			upstreamResolverType := config.DexUpstreamResolver
 
 			cases := []struct {
-				name              string
+				name               string
 				intervalStartDelta time.Duration
 				intervalEndDelta   time.Duration
 			}{
 				{
-					name:              "hourly interval within the same calendar day",
+					name:               "hourly interval within the same calendar day",
 					intervalStartDelta: -1 * time.Hour,
 					intervalEndDelta:   0,
 				},
 				{
-					name:              "interval spans a single day",
+					name:               "interval spans a single day",
 					intervalStartDelta: -24 * time.Hour,
 					intervalEndDelta:   0,
 				},
 				{
-					name:              "interval spans multiple days",
+					name:               "interval spans multiple days",
 					intervalStartDelta: -3 * 24 * time.Hour,
 					intervalEndDelta:   0,
 				},

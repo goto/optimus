@@ -65,6 +65,7 @@ type JobRunService interface {
 	GetJobRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, criteria *scheduler.JobRunsCriteria) ([]*scheduler.JobRunStatus, string, error)
 	UploadToScheduler(ctx context.Context, projectName tenant.ProjectName) error
 	GetInterval(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, referenceTime time.Time) (interval.Interval, error)
+	ListOperatorRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) ([]*scheduler.OperatorRun, error)
 
 	GetReplayRunByScheduledAt(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.ReplayWithRun, error)
 }
@@ -717,6 +718,39 @@ func (h JobRunHandler) JobExpectedCompletionTimeReport(ctx context.Context, req 
 		response.Summary.MaxActualCompletionTime = timestamppb.New(*report.Summary.MaxActualCompletionTime)
 	}
 
+	return response, nil
+}
+
+func (h JobRunHandler) ListJobRunOperatorRuns(ctx context.Context, req *pb.ListJobRunOperatorRunsRequest) (*pb.ListJobRunOperatorRunsResponse, error) {
+	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
+	if err != nil {
+		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
+		return nil, errors.GRPCErr(err, "unable to list operator runs for "+req.GetJobName())
+	}
+
+	jobName, err := scheduler.JobNameFrom(req.GetJobName())
+	if err != nil {
+		h.l.Error("error adapting job name [%s]: %s", req.GetJobName(), err)
+		return nil, errors.GRPCErr(err, "unable to list operator runs for "+req.GetJobName())
+	}
+
+	if err := req.GetScheduledAt().CheckValid(); err != nil {
+		h.l.Error("invalid scheduled_at: %s", err)
+		return nil, errors.GRPCErr(errors.InvalidArgument(scheduler.EntityJobRun, "invalid scheduled_at"), "unable to list operator runs for "+req.GetJobName())
+	}
+
+	operatorRuns, err := h.service.ListOperatorRuns(ctx, projectName, jobName, req.GetScheduledAt().AsTime())
+	if err != nil {
+		h.l.Error("error listing operator runs for job [%s:%s]: %s", projectName, jobName, err)
+		return nil, errors.GRPCErr(err, "unable to list operator runs for "+req.GetJobName())
+	}
+
+	response := &pb.ListJobRunOperatorRunsResponse{
+		OperatorRuns: make([]*pb.OperatorRunDetail, 0, len(operatorRuns)),
+	}
+	for _, run := range operatorRuns {
+		response.OperatorRuns = append(response.OperatorRuns, toOperatorRunDetailProto(run))
+	}
 	return response, nil
 }
 

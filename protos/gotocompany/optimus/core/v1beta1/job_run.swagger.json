@@ -282,6 +282,50 @@
         ]
       }
     },
+    "/v1beta1/project/{projectName}/job/{jobName}/operator_runs": {
+      "get": {
+        "summary": "ListJobRunOperatorRuns lists every sensor, task and hook run (including all\nretry attempts) belonging to a single job run, identified by project, job\nname and scheduled_at, sorted by start time descending (newest first).",
+        "operationId": "JobRunService_ListJobRunOperatorRuns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1ListJobRunOperatorRunsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jobName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "scheduledAt",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
+    },
     "/v1beta1/project/{projectName}/job/{jobName}/run": {
       "get": {
         "summary": "JobRun returns the current and past run status of jobs on a given range",
@@ -1544,6 +1588,49 @@
           }
         }
       }
+    },
+    "v1beta1ListJobRunOperatorRunsResponse": {
+      "type": "object",
+      "properties": {
+        "operatorRuns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1OperatorRunDetail"
+          }
+        }
+      }
+    },
+    "v1beta1OperatorRunDetail": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "operatorType": {
+          "$ref": "#/definitions/v1beta1OperatorType"
+        },
+        "state": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1beta1OperatorType": {
+      "type": "string",
+      "enum": [
+        "OPERATOR_TYPE_UNSPECIFIED",
+        "OPERATOR_TYPE_TASK",
+        "OPERATOR_TYPE_SENSOR",
+        "OPERATOR_TYPE_HOOK"
+      ],
+      "default": "OPERATOR_TYPE_UNSPECIFIED"
     },
     "v1beta1PotentialSLABreachLabelGroup": {
       "type": "object",

@@ -179,4 +179,80 @@ func TestPostgresJobOperatorRepository(t *testing.T) {
 			assert.Equal(t, scheduler.StateFailed, operatorRun.Status)
 		})
 	})
+
+	t.Run("ListOperatorRunsByJobRun", func(t *testing.T) {
+		t.Run("returns all sensor, task and hook runs of a job run sorted by start time descending", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
+			assert.Nil(t, err)
+
+			jobRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt)
+			assert.Nil(t, err)
+
+			operatorRunRepo := postgres.NewOperatorRunRepository(db)
+			// oldest: first (failed) attempt of the task
+			err = operatorRunRepo.CreateOperatorRun(ctx, "bq2bq", scheduler.OperatorTask, jobRun.ID, operatorStartTime)
+			assert.Nil(t, err)
+			firstAttempt, err := operatorRunRepo.GetOperatorRun(ctx, "bq2bq", scheduler.OperatorTask, jobRun.ID)
+			assert.Nil(t, err)
+			err = operatorRunRepo.UpdateOperatorRun(ctx, scheduler.OperatorTask, firstAttempt.ID, operatorStartTime.Add(5*time.Minute), scheduler.StateFailed)
+			assert.Nil(t, err)
+
+			// middle: sensor wait_upstream
+			err = operatorRunRepo.CreateOperatorRun(ctx, "wait_upstream", scheduler.OperatorSensor, jobRun.ID, operatorStartTime.Add(10*time.Minute))
+			assert.Nil(t, err)
+
+			// newest: retry attempt of the task
+			err = operatorRunRepo.CreateOperatorRun(ctx, "bq2bq", scheduler.OperatorTask, jobRun.ID, operatorStartTime.Add(20*time.Minute))
+			assert.Nil(t, err)
+
+			// hook of a different job run must not leak in
+			err = jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt.Add(time.Hour), intr, slaDefinitionInSec)
+			assert.Nil(t, err)
+			otherRun, err := jobRunRepo.GetByScheduledAt(ctx, tnnt, jobAName, scheduledAt.Add(time.Hour))
+			assert.Nil(t, err)
+			err = operatorRunRepo.CreateOperatorRun(ctx, "other-hook", scheduler.OperatorHook, otherRun.ID, operatorStartTime)
+			assert.Nil(t, err)
+
+			runs, err := operatorRunRepo.ListOperatorRunsByJobRun(ctx, tnnt.ProjectName(), jobAName, scheduledAt)
+			assert.Nil(t, err)
+			assert.Len(t, runs, 3)
+
+			// newest first, including every retry attempt of bq2bq
+			assert.Equal(t, "bq2bq", runs[0].Name)
+			assert.Equal(t, scheduler.OperatorTask, runs[0].OperatorType)
+			assert.Equal(t, scheduler.StateRunning, runs[0].Status)
+			assert.Equal(t, "wait_upstream", runs[1].Name)
+			assert.Equal(t, scheduler.OperatorSensor, runs[1].OperatorType)
+			assert.Equal(t, "bq2bq", runs[2].Name)
+			assert.Equal(t, scheduler.StateFailed, runs[2].Status)
+			assert.Equal(t, jobRun.ID, runs[0].JobRunID)
+			assert.Equal(t, operatorStartTime.Add(20*time.Minute).UTC().Format(time.RFC1123), runs[0].StartTime.UTC().Format(time.RFC1123))
+		})
+
+		t.Run("returns an empty slice when the job run has no operator runs", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+			jobRunRepo := postgres.NewJobRunRepository(db, nil)
+			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
+			assert.Nil(t, err)
+
+			operatorRunRepo := postgres.NewOperatorRunRepository(db)
+			runs, err := operatorRunRepo.ListOperatorRunsByJobRun(ctx, tnnt.ProjectName(), jobAName, scheduledAt)
+			assert.Nil(t, err)
+			assert.Empty(t, runs)
+		})
+
+		t.Run("returns not found when the job run does not exist", func(t *testing.T) {
+			db := dbSetup()
+			_ = addJobs(ctx, t, db)
+
+			operatorRunRepo := postgres.NewOperatorRunRepository(db)
+			runs, err := operatorRunRepo.ListOperatorRunsByJobRun(ctx, tnnt.ProjectName(), jobAName, scheduledAt)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+			assert.Nil(t, runs)
+		})
+	})
 }

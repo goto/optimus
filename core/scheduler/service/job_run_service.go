@@ -92,6 +92,7 @@ type OperatorRunRepository interface {
 	// job run -- used by the airflow-sync reconciler to see every child's current status before
 	// deciding what to touch (unlike GetOperatorRun, which only looks up one known name).
 	ListLatestOperatorRunsByJobRunID(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error)
+	ListOperatorRunsByJobRun(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) ([]*scheduler.OperatorRun, error)
 	CreateOperatorRun(ctx context.Context, operatorName string, operator scheduler.OperatorType, jobRunID uuid.UUID, startTime time.Time) error
 	UpdateOperatorRun(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID, eventTime time.Time, state scheduler.State) error
 }
@@ -234,6 +235,10 @@ func (s *JobRunService) JobRunInput(ctx context.Context, projectName tenant.Proj
 	}
 
 	return s.compiler.Compile(ctx, details, config, executedAt, nil)
+}
+
+func (s *JobRunService) ListOperatorRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) ([]*scheduler.OperatorRun, error) {
+	return s.operatorRunRepo.ListOperatorRunsByJobRun(ctx, projectName, jobName, scheduledAt)
 }
 
 func (s *JobRunService) GetJobRunsByFilter(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, filters ...filter.FilterOpt) ([]*scheduler.JobRun, error) {

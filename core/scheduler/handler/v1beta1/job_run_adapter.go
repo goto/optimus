@@ -152,6 +152,25 @@ func toJobRunStateProto(state scheduler.State) pb.JobRunState {
 	return pb.JobRunState_JOB_RUN_STATE_UNSPECIFIED
 }
 
+var operatorTypeToProto = map[scheduler.OperatorType]pb.OperatorType{
+	scheduler.OperatorTask:   pb.OperatorType_OPERATOR_TYPE_TASK,
+	scheduler.OperatorSensor: pb.OperatorType_OPERATOR_TYPE_SENSOR,
+	scheduler.OperatorHook:   pb.OperatorType_OPERATOR_TYPE_HOOK,
+}
+
+func toOperatorRunDetailProto(run *scheduler.OperatorRun) *pb.OperatorRunDetail {
+	detail := &pb.OperatorRunDetail{
+		Name:         run.Name,
+		OperatorType: operatorTypeToProto[run.OperatorType],
+		State:        run.Status.String(),
+		StartTime:    timestamppb.New(run.StartTime),
+	}
+	if run.EndTime != nil {
+		detail.EndTime = timestamppb.New(*run.EndTime)
+	}
+	return detail
+}
+
 func toJobRunRefsProto(refs []scheduler.JobRunKey) []*pb.JobRunRef {
 	if len(refs) == 0 {
 		return nil

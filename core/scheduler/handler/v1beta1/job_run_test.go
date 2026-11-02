@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -19,6 +20,7 @@ import (
 	"github.com/goto/optimus/core/scheduler/handler/v1beta1"
 	"github.com/goto/optimus/core/scheduler/service"
 	"github.com/goto/optimus/core/tenant"
+	opterrors "github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/interval"
 	"github.com/goto/optimus/internal/lib/window"
 	"github.com/goto/optimus/internal/utils/filter"
@@ -137,6 +139,140 @@ func TestJobRunHandler(t *testing.T) {
 			resp, err := jobRunHandler.GetJobRuns(ctx, req)
 			assert.NotNil(t, err)
 			assert.EqualError(t, err, "rpc error: code = Internal desc = service error: unable to get job run for job1")
+			assert.Nil(t, resp)
+		})
+	})
+
+	t.Run("ListJobRunOperatorRuns", func(t *testing.T) {
+		t.Run("should return error if project name is invalid", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "",
+				JobName:     "job1",
+				ScheduledAt: timestamppb.New(time.Now()),
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.ErrorContains(t, err, "unable to list operator runs for job1")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return error if job name is invalid", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "proj",
+				JobName:     "",
+				ScheduledAt: timestamppb.New(time.Now()),
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.ErrorContains(t, err, "unable to list operator runs for ")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return error if scheduled_at is not set", func(t *testing.T) {
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, nil, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.ErrorContains(t, err, "invalid scheduled_at")
+			assert.Nil(t, resp)
+		})
+
+		t.Run("should return operator runs sorted by start time descending", func(t *testing.T) {
+			scheduledAt := time.Now().UTC().Add(-2 * time.Hour)
+			startTime := time.Now().UTC().Add(-time.Hour)
+			operatorRuns := []*scheduler.OperatorRun{
+				{
+					ID:           uuid.New(),
+					Name:         "wait_upstream",
+					JobRunID:     uuid.New(),
+					OperatorType: scheduler.OperatorSensor,
+					Status:       scheduler.StateSuccess,
+					StartTime:    startTime,
+				},
+				{
+					ID:           uuid.New(),
+					Name:         "bq2bq",
+					JobRunID:     uuid.New(),
+					OperatorType: scheduler.OperatorTask,
+					Status:       scheduler.StateFailed,
+					StartTime:    startTime,
+				},
+				{
+					ID:           uuid.New(),
+					Name:         "bq2bq",
+					JobRunID:     uuid.New(),
+					OperatorType: scheduler.OperatorTask,
+					Status:       scheduler.StateSuccess,
+					StartTime:    startTime.Add(-10 * time.Minute),
+				},
+			}
+
+			jobRunService := new(mockJobRunService)
+			jobRunService.On("ListOperatorRuns", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), scheduledAt).
+				Return(operatorRuns, nil)
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				ScheduledAt: timestamppb.New(scheduledAt),
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.Nil(t, err)
+			assert.NotNil(t, resp)
+			assert.Len(t, resp.OperatorRuns, 3)
+
+			// all retry attempts are included; retry (newest start) sorts first
+			assert.Equal(t, "wait_upstream", resp.OperatorRuns[0].Name)
+			assert.Equal(t, pb.OperatorType_OPERATOR_TYPE_SENSOR, resp.OperatorRuns[0].OperatorType)
+			assert.Equal(t, scheduler.StateSuccess.String(), resp.OperatorRuns[0].State)
+			assert.Equal(t, "bq2bq", resp.OperatorRuns[1].Name)
+			assert.Equal(t, pb.OperatorType_OPERATOR_TYPE_TASK, resp.OperatorRuns[1].OperatorType)
+			assert.Equal(t, scheduler.StateFailed.String(), resp.OperatorRuns[1].State)
+			assert.Equal(t, "bq2bq", resp.OperatorRuns[2].Name)
+			assert.Equal(t, scheduler.StateSuccess.String(), resp.OperatorRuns[2].State)
+		})
+
+		t.Run("should return empty list when the run has no operator runs", func(t *testing.T) {
+			scheduledAt := time.Now().UTC().Add(-time.Hour)
+
+			jobRunService := new(mockJobRunService)
+			jobRunService.On("ListOperatorRuns", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), scheduledAt).
+				Return([]*scheduler.OperatorRun{}, nil)
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				ScheduledAt: timestamppb.New(scheduledAt),
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.Nil(t, err)
+			assert.NotNil(t, resp)
+			assert.Empty(t, resp.OperatorRuns)
+		})
+
+		t.Run("should return not found when the job run does not exist", func(t *testing.T) {
+			scheduledAt := time.Now().UTC().Add(-time.Hour)
+
+			jobRunService := new(mockJobRunService)
+			jobRunService.On("ListOperatorRuns", ctx, tenant.ProjectName("proj"), scheduler.JobName("job1"), scheduledAt).
+				Return(nil, opterrors.NotFound(scheduler.EntityJobRun, "no job run"))
+			defer jobRunService.AssertExpectations(t)
+
+			jobRunHandler := v1beta1.NewJobRunHandler(logger, jobRunService, nil, nil, nil, nil, nil, nil, false)
+			req := &pb.ListJobRunOperatorRunsRequest{
+				ProjectName: "proj",
+				JobName:     "job1",
+				ScheduledAt: timestamppb.New(scheduledAt),
+			}
+			resp, err := jobRunHandler.ListJobRunOperatorRuns(ctx, req)
+			assert.NotNil(t, err)
+			assert.ErrorContains(t, err, "no job run")
 			assert.Nil(t, resp)
 		})
 	})
@@ -1490,6 +1626,14 @@ func (m *mockJobRunService) GetInterval(ctx context.Context, projectName tenant.
 		return interval.Interval{}, args.Error(1)
 	}
 	return args.Get(0).(interval.Interval), args.Error(1)
+}
+
+func (m *mockJobRunService) ListOperatorRuns(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) ([]*scheduler.OperatorRun, error) {
+	args := m.Called(ctx, projectName, jobName, scheduledAt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.OperatorRun), args.Error(1)
 }
 
 type mockNotifier struct {

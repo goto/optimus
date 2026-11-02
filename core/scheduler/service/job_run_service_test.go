@@ -906,6 +906,49 @@ func TestJobRunService(t *testing.T) {
 		})
 	})
 
+	t.Run("ListOperatorRuns", func(t *testing.T) {
+		t.Run("should return all operator runs of a job run", func(t *testing.T) {
+			operatorRunRepo := new(mockOperatorRunRepository)
+			expectedRuns := []*scheduler.OperatorRun{
+				{
+					ID:           uuid.New(),
+					Name:         "bq2bq",
+					JobRunID:     uuid.New(),
+					OperatorType: scheduler.OperatorTask,
+					Status:       scheduler.StateRunning,
+					StartTime:    todayDate,
+				},
+				{
+					ID:           uuid.New(),
+					Name:         "wait_upstream",
+					JobRunID:     uuid.New(),
+					OperatorType: scheduler.OperatorSensor,
+					Status:       scheduler.StateSuccess,
+					StartTime:    todayDate.Add(-time.Hour),
+				},
+			}
+			operatorRunRepo.On("ListOperatorRunsByJobRun", ctx, projName, jobName, scheduledAtTimeStamp).Return(expectedRuns, nil)
+
+			runService := service.NewJobRunService(logger,
+				nil, nil, nil, operatorRunRepo, nil, nil, nil, nil, nil, nil, feats, nil, nil)
+			runs, err := runService.ListOperatorRuns(ctx, projName, jobName, scheduledAtTimeStamp)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedRuns, runs)
+		})
+
+		t.Run("should return not found when the job run does not exist", func(t *testing.T) {
+			operatorRunRepo := new(mockOperatorRunRepository)
+			operatorRunRepo.On("ListOperatorRunsByJobRun", ctx, projName, jobName, scheduledAtTimeStamp).
+				Return(nil, errors.NotFound(scheduler.EntityJobRun, "no job run"))
+
+			runService := service.NewJobRunService(logger,
+				nil, nil, nil, operatorRunRepo, nil, nil, nil, nil, nil, nil, feats, nil, nil)
+			runs, err := runService.ListOperatorRuns(ctx, projName, jobName, scheduledAtTimeStamp)
+			assert.True(t, errors.IsErrorType(err, errors.ErrNotFound))
+			assert.Nil(t, runs)
+		})
+	})
+
 	t.Run("JobRunInput", func(t *testing.T) {
 		t.Run("should return error if getJob fails", func(t *testing.T) {
 			jobRepo := new(JobRepository)
@@ -2853,6 +2896,14 @@ func (m *mockOperatorRunRepository) GetOperatorRun(ctx context.Context, operator
 
 func (m *mockOperatorRunRepository) ListLatestOperatorRunsByJobRunID(ctx context.Context, operator scheduler.OperatorType, jobRunID uuid.UUID) ([]*scheduler.OperatorRun, error) {
 	args := m.Called(ctx, operator, jobRunID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*scheduler.OperatorRun), args.Error(1)
+}
+
+func (m *mockOperatorRunRepository) ListOperatorRunsByJobRun(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName, scheduledAt time.Time) ([]*scheduler.OperatorRun, error) {
+	args := m.Called(ctx, projectName, jobName, scheduledAt)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

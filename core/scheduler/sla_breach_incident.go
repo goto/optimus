@@ -212,4 +212,5 @@ type RootCauseBreachAlert struct {
 	RootCauseScheduledAt *time.Time
 	Reason               RootCauseReasonDetail
 	ImpactedJobs         []string
+	Severity             string
 }

@@ -147,6 +147,7 @@ type RootCauseAlertConfig struct {
 	DedupWindowMinutes int      `mapstructure:"dedup_window_minutes" default:"60"`
 	InfraTeam          string   `mapstructure:"infra_team"`
 	ThirdPartyTeam     string   `mapstructure:"third_party_team"`
+	AlertSeverity      string   `mapstructure:"alert_severity" default:"WARNING"`
 	ExcludeProjects    []string `mapstructure:"exclude_projects"`
 }
 

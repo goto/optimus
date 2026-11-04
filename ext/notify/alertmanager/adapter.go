@@ -341,17 +341,25 @@ func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBre
 		data["source_type"] = alert.Reason.SourceType
 	}
 
-	return &AlertPayload{
+	severity := getSeverity(alert.Severity)
+
+	alertPayload := &AlertPayload{
 		Project:  alert.Project,
 		Data:     data,
 		Template: OptimusRootCauseBreachTemplate,
 		Labels: map[string]string{
 			DefaultChannelLabel: alert.Team,
-			SeverityLabel:       WarningSeverity,
+			SeverityLabel:       severity,
 		},
 		Endpoint:  a.endpoint,
 		AlertType: AlertTypeRootCauseBreach,
 	}
+
+	if severity == CriticalSeverity {
+		alertPayload.Labels[EnvironmentLabel] = "production"
+	}
+
+	return alertPayload
 }
 
 // buildPotentialSLABreachPayload flattens one root cause into a payload. Dedup keys

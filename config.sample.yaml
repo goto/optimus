@@ -146,6 +146,11 @@ alerting:
     infra_team: infra-team
     # ThirdPartyTeam receives THIRD_PARTY_DELAY alerts
     third_party_team: third-party-team
+    # AlertSeverity caps the severity of every root-cause SLA alert (rootcause_breach).
+    # Keep WARNING during rollout so on-call is not paged; raise to CRITICAL once trusted.
+    # Invalid or empty values fall back to WARNING. CRITICAL also marks the alert
+    # environment as production.
+    alert_severity: WARNING
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

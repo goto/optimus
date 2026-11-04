@@ -80,5 +80,45 @@ func TestBuildRootCauseBreachPayload(t *testing.T) {
 		assert.Equal(t, []string{"wait_dex_event_delivery"}, payload.Data["blocked_on_sensors"])
 		assert.Equal(t, "dex", payload.Data["source_type"])
 		assert.Equal(t, "streaming-team", payload.Labels[DefaultChannelLabel])
+		// no severity set → the rollout default WARNING, no production environment
+		assert.Equal(t, WarningSeverity, payload.Labels[SeverityLabel])
+		assert.NotContains(t, payload.Labels, EnvironmentLabel)
+	})
+
+	t.Run("severity follows the alert and CRITICAL marks the environment as production", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "streaming-team",
+			Project:          "p_raw",
+			RootCauseProject: "p_raw",
+			RootCauseJob:     "job_raw",
+			Severity:         "CRITICAL",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:              scheduler.TierThirdPartyDelay,
+				Status:              scheduler.ReasonStatusActive,
+				InducedDelaySeconds: 1200,
+				BlockedOnSensors:    []string{"wait_dex_event_delivery"},
+				SourceType:          "dex",
+			},
+		})
+
+		assert.Equal(t, CriticalSeverity, payload.Labels[SeverityLabel])
+		assert.Equal(t, "production", payload.Labels[EnvironmentLabel])
+	})
+
+	t.Run("an unknown severity falls back to WARNING so rollout stays unpaged", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "streaming-team",
+			Project:          "p_raw",
+			RootCauseProject: "p_raw",
+			RootCauseJob:     "job_raw",
+			Severity:         "nonsense",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason: scheduler.TierThirdPartyDelay,
+				Status: scheduler.ReasonStatusActive,
+			},
+		})
+
+		assert.Equal(t, WarningSeverity, payload.Labels[SeverityLabel])
+		assert.NotContains(t, payload.Labels, EnvironmentLabel)
 	})
 }

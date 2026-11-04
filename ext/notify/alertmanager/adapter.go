@@ -461,8 +461,9 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 	return fields
 }
 
-// formatDuration rounds to the minute so "Delayed by" reads e.g. "1h2m" instead of the raw
-// "1h2m3.456789s" that time.Duration.String() would otherwise produce.
+// formatDuration renders at second precision so sub-minute delays are visible ("1m5s",
+// "45s") instead of collapsing to the enclosing minute; time.Duration.String() already
+// omits trailing zero components ("40m0s" for an exact 40m).
 func formatDuration(d time.Duration) string {
-	return d.Round(time.Minute).String()
+	return d.Round(time.Second).String()
 }

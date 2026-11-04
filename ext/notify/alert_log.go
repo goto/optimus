@@ -23,6 +23,9 @@ type AlertDeduplicationConfig struct {
 	ActiveWindowTimezone  *time.Location
 	ActiveWindowStartHour int
 	ActiveWindowEndHour   int
+	// EnabledWarningDedup sends deduplicated alerts through alert manager with severity
+	// downgraded to WARNING instead of dropping them entirely.
+	EnabledWarningDedup bool
 }
 
 func (c AlertDeduplicationConfig) IsWithinActiveWindow(t time.Time) bool {
@@ -120,6 +123,11 @@ func getDedupValues(alert *alertmanager.AlertPayload, dedupKeys []string) map[st
 	}
 
 	return dedupValues
+}
+
+func (a *AlertLogProvider) ShouldWarnOnDedup(alertType string) bool {
+	dedupConfig, found := a.dedupConfigByAlertTypeMap[alertType]
+	return found && dedupConfig.EnabledWarningDedup
 }
 
 func (a *AlertLogProvider) UpdateStatus(ctx context.Context, logID uuid.UUID, status alertmanager.AlertStatus, message string) error {

@@ -107,6 +107,9 @@ alerting:
       active_window_timezone: Asia/Jakarta
       active_window_start_hour: 0
       active_window_end_hour: 3
+      # when true, deduplicated alerts are still sent through alert manager with
+      # severity downgraded to WARNING instead of being skipped entirely
+      enabled_warning_dedup: false
     potential_sla_breach:
       dedup_keys:
       - data.root_cause_job
@@ -116,6 +119,7 @@ alerting:
       active_window_timezone: Asia/Jakarta
       active_window_start_hour: 0
       active_window_end_hour: 9
+      enabled_warning_dedup: false
 
 # SLA breach-detection background worker cadence
 sla:

@@ -278,3 +278,31 @@ func TestAlertLogProvider(t *testing.T) {
 		assert.True(t, isDeduplicated)
 	})
 }
+
+func TestShouldWarnOnDedup(t *testing.T) {
+	logger := log.NewNoop()
+
+	t.Run("should return true when alert type has config with warning dedup enabled", func(t *testing.T) {
+		cfg := map[string]notify.AlertDeduplicationConfig{
+			"job_failure": {EnabledWarningDedup: true},
+		}
+		provider := notify.NewAlertLogProvider(nil, cfg, logger)
+
+		assert.True(t, provider.ShouldWarnOnDedup("job_failure"))
+	})
+
+	t.Run("should return false when warning dedup is disabled", func(t *testing.T) {
+		cfg := map[string]notify.AlertDeduplicationConfig{
+			"job_failure": {EnabledWarningDedup: false},
+		}
+		provider := notify.NewAlertLogProvider(nil, cfg, logger)
+
+		assert.False(t, provider.ShouldWarnOnDedup("job_failure"))
+	})
+
+	t.Run("should return false for unknown alert type", func(t *testing.T) {
+		provider := notify.NewAlertLogProvider(nil, map[string]notify.AlertDeduplicationConfig{}, logger)
+
+		assert.False(t, provider.ShouldWarnOnDedup("job_failure"))
+	})
+}

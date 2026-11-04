@@ -106,6 +106,7 @@ type AlertRules struct {
 type AlertLogProvider interface {
 	Insert(ctx context.Context, payload *AlertPayload) (uuid.UUID, bool, error)
 	UpdateStatus(ctx context.Context, recordID uuid.UUID, status AlertStatus, message string) error
+	ShouldWarnOnDedup(alertType string) bool
 }
 
 func (a *AlertManager) relay(alert *AlertPayload) {
@@ -202,6 +203,26 @@ func (a *AlertManager) worker(ctx context.Context) {
 				a.logger.Error("failed to log event", "error", err)
 			}
 			if isDeduplicated {
+				if !a.alertLogProvider.ShouldWarnOnDedup(e.AlertType) {
+					continue
+				}
+				// warning-dedup: still deliver the alert, but downgrade severity so it
+				// does not page. environment is dropped because it is only set for CRITICAL.
+				if e.Labels == nil {
+					e.Labels = make(map[string]string)
+				}
+				e.Labels[SeverityLabel] = WarningSeverity
+				a.logger.Info("alert-manager: deduplicated alert re-sent as WARNING " + e.LogTag)
+
+				if sendErr := a.PrepareAndSendEvent(e); sendErr != nil {
+					eventWorkerSendErrCounter.WithLabelValues(e.Project, e.LogTag, sendErr.Error()).Inc()
+					eventDataBytes, _ := json.Marshal(e.Data)
+					a.workerErrChan <- fmt.Errorf("alert worker: event_info: [ %s ], err: %w", string(eventDataBytes), sendErr)
+				} else {
+					successSentCounter.WithLabelValues(e.Project, e.LogTag).Inc()
+				}
+				// keep the log row as DEDUPLICATED so it stays distinguishable from a
+				// full-strength alert; only SENT rows count toward future dedup checks.
 				continue
 			}
 

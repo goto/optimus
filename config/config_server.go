@@ -253,14 +253,10 @@ type JobExpectatorConfig struct {
 }
 
 type JobExecutionSummaryConfig struct {
-	MaxLineageDepth    int                      `mapstructure:"max_lineage_depth" default:"25"`
-	LineageWindowHours int                      `mapstructure:"lineage_window_hours" default:"24"`
-	HistoricalDuration HistoricalDurationConfig `mapstructure:"historical_duration"`
-	// PotentialBreach enables the lineage summary to predict whether a target run is
-	// heading for an SLA miss: every wait-chain node gets an inferred deadline (the
-	// target's SLA minus damped estimated durations) and is flagged when its current
-	// state endangers that deadline.
-	PotentialBreach PotentialBreachPredictionConfig `mapstructure:"potential_breach"`
+	MaxLineageDepth    int                             `mapstructure:"max_lineage_depth" default:"25"`
+	LineageWindowHours int                             `mapstructure:"lineage_window_hours" default:"24"`
+	HistoricalDuration HistoricalDurationConfig        `mapstructure:"historical_duration"`
+	PotentialBreach    PotentialBreachPredictionConfig `mapstructure:"potential_breach"`
 }
 
 // PotentialBreachPredictionConfig tunes the potential-breach prediction computed in the

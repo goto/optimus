@@ -307,6 +307,8 @@ func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, 
 				InducedDelaySeconds: int(wait.Seconds()),
 				BlockedOnSensors:    []string{*sensorName},
 				SourceType:          thirdPartyType,
+				// a sensor wait is finished once its wait end time exists
+				IsJobFinished: node.JobRunSummary.WaitEndTime != nil,
 			},
 			ImpactedJobs: impacted,
 		})
@@ -373,6 +375,7 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, path [
 				Reason:              scheduler.TierSchedulerDelay,
 				Status:              scheduler.ReasonStatusActive,
 				InducedDelaySeconds: int(delay.Seconds()),
+				IsJobFinished:       node.JobRunSummary.IsFinished(),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -430,6 +433,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				Reason:              scheduler.TierRuntimeDelay,
 				Status:              scheduler.ReasonStatusActive,
 				InducedDelaySeconds: int(delayed.induced.Seconds()),
+				IsJobFinished:       delayed.node.JobRunSummary.IsFinished(),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -465,6 +469,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				Reason:              scheduler.TierRuntimeDelay,
 				Status:              scheduler.ReasonStatusActive,
 				InducedDelaySeconds: int(maxTotal.Seconds()),
+				IsJobFinished:       maxNode.JobRunSummary.IsFinished(),
 			},
 			ImpactedJobs: impacted,
 		})

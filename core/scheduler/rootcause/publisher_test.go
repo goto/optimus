@@ -129,6 +129,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Len(t, matched, 1)
 		assert.Equal(t, "job_upstream", matched[0].IncidentKey.JobName.String())
 		assert.Equal(t, int(35*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+		assert.True(t, matched[0].Reason.IsJobFinished, "the offending run has finished")
 		assert.Equal(t, scheduler.ReasonStatusActive, matched[0].Reason.Status)
 		assert.Equal(t, "job_target", matched[0].ImpactedJobs[0].JobName.String())
 	})
@@ -296,6 +297,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
 		assert.Len(t, matched, 1)
 		assert.Equal(t, "job_a2", matched[0].IncidentKey.JobName.String())
+		assert.False(t, matched[0].Reason.IsJobFinished, "the offending run is still running")
 		// reference - task start - baseline = 4h30m - 30m
 		assert.Equal(t, int((240*time.Minute)/time.Second), matched[0].Reason.InducedDelaySeconds)
 	})

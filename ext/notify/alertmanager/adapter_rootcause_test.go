@@ -83,6 +83,25 @@ func TestBuildRootCauseBreachPayload(t *testing.T) {
 		// no severity set → the rollout default WARNING, no production environment
 		assert.Equal(t, WarningSeverity, payload.Labels[SeverityLabel])
 		assert.NotContains(t, payload.Labels, EnvironmentLabel)
+		// the offending run has not finished here
+		assert.NotContains(t, payload.Data, "root_cause_finished")
+	})
+
+	t.Run("a finished root cause marks the payload so the template can render it", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "proj-team",
+			Project:          "p_root",
+			RootCauseProject: "p_root",
+			RootCauseJob:     "job_offender",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:              scheduler.TierRuntimeDelay,
+				Status:              scheduler.ReasonStatusActive,
+				InducedDelaySeconds: 2400,
+				IsJobFinished:       true,
+			},
+		})
+
+		assert.Equal(t, true, payload.Data["root_cause_finished"])
 	})
 
 	t.Run("severity follows the alert and CRITICAL marks the environment as production", func(t *testing.T) {

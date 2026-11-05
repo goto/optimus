@@ -340,6 +340,11 @@ func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBre
 	if alert.Reason.SourceType != "" {
 		data["source_type"] = alert.Reason.SourceType
 	}
+	// present only when the offending run has finished: the template renders the
+	// "root cause has finished, impact is final" line from this key
+	if alert.Reason.IsJobFinished {
+		data["root_cause_finished"] = true
+	}
 
 	severity := getSeverity(alert.Severity)
 

@@ -51,6 +51,11 @@ type RootCauseReasonDetail struct {
 	InducedDelaySeconds int           `json:"induced_delay_seconds"`
 	BlockedOnSensors    []string      `json:"blocked_on_sensors,omitempty"`
 	SourceType          string        `json:"source_type,omitempty"`
+	// IsJobFinished records whether the offending run had already finished when this
+	// reason was observed. The alert router uses it to send exactly one notification for
+	// a finished cause instead of hourly repeats. Absent (false) on older rows, which
+	// correctly reads as "was still running when last seen".
+	IsJobFinished bool `json:"is_job_finished,omitempty"`
 }
 
 type RootCauseDetails struct {

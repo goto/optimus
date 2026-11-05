@@ -342,6 +342,15 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			LastNRuns:  7,
 			Percentile: 95,
 		},
+		PotentialBreach: config.PotentialBreachPredictionConfig{
+			Enable: false,
+			DamperFactor: config.DamperPredictionConfig{
+				BaseValue: 1.0,
+				Alpha:     1.0,
+				MinValue:  0,
+				Method:    "APPLY_METHOD_EXPONENTIAL",
+			},
+		},
 	}
 	s.expectedServerConfig.Backfill.ExecutionIntervalInSeconds = 300
 

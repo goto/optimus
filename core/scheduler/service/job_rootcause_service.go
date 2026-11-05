@@ -114,8 +114,8 @@ func (s *JobRootCauseService) IdentifySLABreachRootCause(ctx context.Context, re
 	}
 
 	if reqConfig.EnableAlert {
-		s.persistIncidents(ctx, reqConfig, incidents)
-		s.sendRootCauseAlerts(ctx, incidents)
+		previousByKey := s.persistIncidents(ctx, reqConfig, incidents)
+		s.sendRootCauseAlerts(ctx, incidents, previousByKey)
 	}
 	return incidents, me.ToErr()
 }
@@ -230,7 +230,11 @@ const activeIncidentScanWindow = 24 * time.Hour
 // incidents that were active before this tick but received no fresh detection have their
 // remaining active reasons flipped to resolved. A failure on one incident is logged and
 // skipped so the rest still persists; the tick's findings remain the source of truth.
-func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig RootCauseRequestConfig, incidents []*scheduler.SLABreachIncidentWithImpacts) {
+// It returns the previously stored incident per key (nil entries for first-time
+// incidents) so the alert router can detect state transitions, such as a root cause
+// finishing.
+func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig RootCauseRequestConfig, incidents []*scheduler.SLABreachIncidentWithImpacts) map[scheduler.SLABreachIncidentKey]*scheduler.SLABreachIncident {
+	previousByKey := map[scheduler.SLABreachIncidentKey]*scheduler.SLABreachIncident{}
 	freshKeys := map[scheduler.SLABreachIncidentKey]bool{}
 	for _, incident := range incidents {
 		freshKeys[incident.Incident.Key] = true
@@ -249,6 +253,7 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig Ro
 				"error", err)
 			previous = nil
 		}
+		previousByKey[incident.Incident.Key] = previous
 
 		merged := scheduler.MergeResolvedReasons(incident.Incident, previous)
 		if err := s.incidentRepo.UpsertIncident(ctx, merged, incident.Impacts); err != nil {
@@ -260,6 +265,7 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig Ro
 	}
 
 	s.resolveUntouchedIncidents(ctx, reqConfig, freshKeys)
+	return previousByKey
 }
 
 // resolveUntouchedIncidents flips the remaining active reasons of every tracked incident
@@ -306,8 +312,10 @@ func (s *JobRootCauseService) resolveUntouchedIncidents(ctx context.Context, req
 // sendRootCauseAlerts routes one alert per active reason: platform-attributed reasons go to
 // their configured team, everything else to the root-cause project's owner. An empty team
 // (unset config or no ALERTMANAGER_TEAM on the project) disables that route. Repetition is
-// suppressed downstream by the alert_logs deduplication for the rootcause_breach type.
-func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts) {
+// suppressed downstream by the alert_logs deduplication for the rootcause_breach type —
+// except for a finished root cause, which notifies exactly once per incident through the
+// run-state transition instead of repeating hourly.
+func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts, previousByKey map[scheduler.SLABreachIncidentKey]*scheduler.SLABreachIncident) {
 	if s.rootCauseNotifier == nil {
 		return
 	}
@@ -321,6 +329,19 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 					"job", incident.Incident.Key.JobName.String(),
 					"induced_delay_seconds", reason.InducedDelaySeconds)
 				continue
+			}
+			// a delay-measuring reason whose offending run has finished gets exactly one
+			// notification: the first finished-state observation. Later ticks see the
+			// stored finished flag and stay silent until the incident resolves.
+			if isDelayMeasuredReason(reason.Reason) && reason.IsJobFinished {
+				if previousReason, hadPrevious := previousReasonOf(previousByKey, incident.Incident.Key, reason.Reason); hadPrevious && previousReason.IsJobFinished {
+					rootCauseAlertsSuppressedTotal.WithLabelValues(string(reason.Reason)).Inc()
+					s.l.Debug("root-cause alert suppressed: the finished cause was already notified",
+						"reason", string(reason.Reason),
+						"project", incident.Incident.Key.ProjectName.String(),
+						"job", incident.Incident.Key.JobName.String())
+					continue
+				}
 			}
 			team := s.routeTeam(ctx, incident.Incident.Key.ProjectName, reason.Reason)
 			if team == "" {
@@ -403,6 +424,20 @@ func (s *JobRootCauseService) projectOwnerTeam(ctx context.Context, projectName 
 	}
 	s.teamCache[projectName] = team
 	return team
+}
+
+// previousReasonOf looks up how a reason looked in the previously stored incident.
+func previousReasonOf(previousByKey map[scheduler.SLABreachIncidentKey]*scheduler.SLABreachIncident, key scheduler.SLABreachIncidentKey, reason scheduler.SLABreachTier) (scheduler.RootCauseReasonDetail, bool) {
+	previous := previousByKey[key]
+	if previous == nil {
+		return scheduler.RootCauseReasonDetail{}, false
+	}
+	for _, previousReason := range previous.Details.Reasons {
+		if previousReason.Reason == reason {
+			return previousReason, true
+		}
+	}
+	return scheduler.RootCauseReasonDetail{}, false
 }
 
 // impactedJobNames renders the blast radius as project-qualified job names for the payload.

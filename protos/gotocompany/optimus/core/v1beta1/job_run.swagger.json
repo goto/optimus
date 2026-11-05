@@ -784,7 +784,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -1199,6 +1199,15 @@
         },
         "projectName": {
           "type": "string"
+        },
+        "inferredSlaTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "InferredSLA is the latest this run may finish for the TARGET run to still make its\nSLA (the target's SLA minus damped estimated durations down the chain). Present only\nwhen the potential-breach prediction is enabled in the server config."
+        },
+        "isPotentialBreachCause": {
+          "type": "boolean",
+          "description": "true when this run's current state endangers its inferred deadline: finished after\nit, still running past it, or not started by the latest start its estimate allows."
         }
       }
     },
@@ -1325,6 +1334,10 @@
         },
         "projectName": {
           "type": "string"
+        },
+        "isPotentiallyBreaching": {
+          "type": "boolean",
+          "description": "true when the prediction says this run is heading for an SLA miss: at least one\nwait-chain node endangers its inferred deadline while the target's own deadline has\nnot passed yet. Present only when the potential-breach prediction is enabled."
         }
       }
     },

@@ -467,3 +467,209 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		notifier.AssertNotCalled(t, "SendRootCauseBreach")
 	})
 }
+
+func TestJobRootCauseService_AlertSuppression(t *testing.T) {
+	ctx := context.Background()
+	projectName := tenant.ProjectName("p_root")
+	tnnt := rcTestTenant("p_root")
+
+	base := time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC)
+	referenceTime := base.Add(3*time.Hour + 30*time.Minute)
+	targetScheduledAt := base.Add(2 * time.Hour)
+
+	jobWithDetails := &scheduler.JobWithDetails{
+		Name: "job_target",
+		Job: &scheduler.Job{
+			Tenant: tnnt,
+			Name:   "job_target",
+		},
+		Schedule: &scheduler.Schedule{
+			StartDate: base.Add(-48 * time.Hour),
+			Interval:  "0 6,12,18 * * *",
+		},
+		Alerts: []scheduler.Alert{{On: scheduler.EventCategorySLAMiss, Config: map[string]string{"duration": "1h"}}},
+	}
+
+	newDeps := func(t *testing.T, lineage *scheduler.JobLineageSummary, durations map[string]time.Duration) (*mockRootCauseDetailsGetter, *mockRootCauseLineageFetcher, *mockRootCauseDurationEstimator) {
+		t.Helper()
+
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
+
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": lineage}, nil).Once()
+
+		estimator := &mockRootCauseDurationEstimator{}
+		durationsByJob := map[scheduler.JobName]*time.Duration{}
+		for jobName, duration := range durations {
+			duration := duration
+			durationsByJob[scheduler.JobName(jobName)] = &duration
+		}
+		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
+			Return(durationsByJob, nil).Once()
+		return detailsGetter, lineageFetcher, estimator
+	}
+
+	evaluate := func(t *testing.T, alertConfig *config.RootCauseAlertConfig, deps func(t *testing.T, lineage *scheduler.JobLineageSummary, durations map[string]time.Duration) (*mockRootCauseDetailsGetter, *mockRootCauseLineageFetcher, *mockRootCauseDurationEstimator), lineage *scheduler.JobLineageSummary, durations map[string]time.Duration, notifier *mockRootCauseNotifier, teamGetter *mockProjectTeamGetter) ([]*scheduler.SLABreachIncidentWithImpacts, *mockRootCauseNotifier) {
+		t.Helper()
+
+		detailsGetter, lineageFetcher, estimator := deps(t, lineage, durations)
+		repo := &mockIncidentRepository{}
+		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
+		if notifier == nil {
+			notifier = &mockRootCauseNotifier{}
+		}
+		if teamGetter == nil {
+			teamGetter = &mockProjectTeamGetter{}
+		}
+
+		svc := service.NewJobRootCauseService(
+			log.NewNoop(),
+			*alertConfig,
+			detailsGetter,
+			lineageFetcher,
+			estimator,
+			repo,
+			[]string{"dex"},
+			notifier,
+			teamGetter,
+		)
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_target"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+		return incidents, notifier
+	}
+
+	t.Run("skip_reasons mutes the alert while the incident is still recorded", func(t *testing.T) {
+		// the runtime-delay scenario: induced 55m on the upstream
+		upstreamRun := rcMakeRun("job_upstream", base,
+			1*time.Hour, rcPtr(base), rcPtr(base.Add(119*time.Minute)), "success")
+		targetRun := rcMakeRun("job_target", targetScheduledAt,
+			1*time.Hour, rcPtr(targetScheduledAt), nil, "running")
+		lineage := rcMakeLineage("job_target", tnnt, targetRun,
+			rcMakeLineage("job_upstream", tnnt, upstreamRun))
+
+		deps := newDeps
+		alertConfig := &config.RootCauseAlertConfig{
+			RuntimeDelayThresholdMinutes:    30,
+			SchedulerDelayMinutesPerDepth:   2.5,
+			ThirdPartyDelayThresholdSeconds: 600,
+			AlertSuppression: config.AlertSuppressionConfig{
+				SkipReasons: []string{"runtime_delay"}, // case-insensitive
+			},
+		}
+
+		incidents, notifier := evaluate(t, alertConfig, deps, lineage, map[string]time.Duration{
+			"job_target":   150 * time.Minute,
+			"job_upstream": 64 * time.Minute,
+		}, nil, nil)
+
+		assert.Len(t, incidents, 1, "incident is still produced and recorded")
+		notifier.AssertNotCalled(t, "SendRootCauseBreach")
+	})
+
+	t.Run("min induced delay mutes a below-floor alert but keeps an above-floor one", func(t *testing.T) {
+		// scheduler-delay scenario with an 85m scheduler wait
+		a2Run := rcMakeRun("job_a2", base.Add(-2*time.Hour),
+			1*time.Hour, rcPtr(base.Add(-2*time.Hour)), rcPtr(base.Add(-45*time.Minute)), "success")
+		b1Run := rcMakeRun("job_b1", base.Add(-time.Hour),
+			1*time.Hour, rcPtr(base.Add(40*time.Minute)), rcPtr(base.Add(45*time.Minute)), "success")
+		targetRun := rcMakeRun("job_target", targetScheduledAt,
+			1*time.Hour, rcPtr(base.Add(time.Hour)), nil, "running")
+		lineage := rcMakeLineage("job_target", tnnt, targetRun,
+			rcMakeLineage("job_b1", tnnt, b1Run,
+				rcMakeLineage("job_a2", tnnt, a2Run)))
+
+		deps := newDeps
+		alertConfig := &config.RootCauseAlertConfig{
+			RuntimeDelayThresholdMinutes:    30,
+			SchedulerDelayMinutesPerDepth:   2.5,
+			ThirdPartyDelayThresholdSeconds: 600,
+			InfraTeam:                       "platform-team",
+			AlertSuppression: config.AlertSuppressionConfig{
+				MinTotalInducedDelayMinutes: 100, // 85m < 100m → muted
+			},
+		}
+
+		incidents, notifier := evaluate(t, alertConfig, deps, lineage, map[string]time.Duration{
+			"job_target": 150 * time.Minute,
+			"job_b1":     5 * time.Minute,
+			"job_a2":     75 * time.Minute,
+		}, nil, nil)
+
+		assert.Len(t, incidents, 1, "incident is still produced and recorded")
+		notifier.AssertNotCalled(t, "SendRootCauseBreach")
+
+		// same lineage, floor lowered below the 85m delay → the alert fires
+		alertConfig.AlertSuppression.MinTotalInducedDelayMinutes = 60
+		notifier = &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(func(args mock.Arguments) {
+			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+			assert.Equal(t, "platform-team", alert.Team)
+			assert.Equal(t, scheduler.TierSchedulerDelay, alert.Reason.Reason)
+		})
+
+		incidents, _ = evaluate(t, alertConfig, deps, lineage, map[string]time.Duration{
+			"job_target": 150 * time.Minute,
+			"job_b1":     5 * time.Minute,
+			"job_a2":     75 * time.Minute,
+		}, notifier, nil)
+
+		assert.Len(t, incidents, 1)
+		notifier.AssertExpectations(t)
+	})
+
+	t.Run("reasons without a measured delay ignore the induced-delay floor", func(t *testing.T) {
+		// FAILED_UPSTREAM carries no measured delay: a 15m floor must not mute it
+		a2Run := rcMakeRun("job_a2", base.Add(-2*time.Hour),
+			1*time.Hour, rcPtr(base.Add(-2*time.Hour)), rcPtr(base.Add(-110*time.Minute)), "failed")
+		b1Run := rcMakeRun("job_b1", base.Add(-time.Hour),
+			1*time.Hour, rcPtr(base.Add(-90*time.Minute)), rcPtr(base.Add(-80*time.Minute)), "success")
+		targetRun := rcMakeRun("job_target", targetScheduledAt,
+			1*time.Hour, rcPtr(base.Add(time.Hour)), nil, "running")
+		lineage := rcMakeLineage("job_target", tnnt, targetRun,
+			rcMakeLineage("job_b1", tnnt, b1Run,
+				rcMakeLineage("job_a2", tnnt, a2Run)))
+
+		deps := newDeps
+		alertConfig := &config.RootCauseAlertConfig{
+			RuntimeDelayThresholdMinutes:    30,
+			SchedulerDelayMinutesPerDepth:   2.5,
+			ThirdPartyDelayThresholdSeconds: 600,
+			AlertSuppression: config.AlertSuppressionConfig{
+				MinTotalInducedDelayMinutes: 15,
+			},
+		}
+
+		projectWithTeam, err := tenant.NewProject("p_root", map[string]string{
+			tenant.ProjectStoragePathKey:   "gs://bucket",
+			tenant.ProjectSchedulerHost:    "airflow.example.com",
+			tenant.ProjectAlertManagerTeam: "proj-team",
+		}, nil)
+		assert.NoError(t, err)
+		projectTeam := &mockProjectTeamGetter{}
+		projectTeam.On("Get", ctx, projectName).Return(projectWithTeam, nil).Once()
+
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(func(args mock.Arguments) {
+			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+			assert.Equal(t, scheduler.TierFailedUpstream, alert.Reason.Reason)
+		})
+
+		incidents, _ := evaluate(t, alertConfig, deps, lineage, map[string]time.Duration{
+			"job_target": 150 * time.Minute,
+			"job_b1":     10 * time.Minute,
+		}, notifier, projectTeam)
+
+		assert.Len(t, incidents, 1)
+		notifier.AssertExpectations(t)
+	})
+}

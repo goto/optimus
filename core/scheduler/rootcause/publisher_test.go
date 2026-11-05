@@ -348,3 +348,65 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
 	})
 }
+
+func TestPublisher_PotentialGate(t *testing.T) {
+	// the target is at 10:00 with a 12:00 deadline (targetSLA); the reference time is
+	// 11:00 — NOT breached, so every detection below comes purely from the potential gate
+	referenceTime := testBaseTime.Add(time.Hour)
+
+	t.Run("an at-risk target yields potential detections", func(t *testing.T) {
+		// upstream has been running 60m against a 10m baseline: 50m induced — over the
+		// threshold while the target's deadline is still an hour away
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), nil, "running")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+		target.IsPotentiallyBreaching = true // stamped by the lineage annotator
+
+		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+			"job_upstream": {TaskDuration: 10 * time.Minute},
+			"job_target":   {TaskDuration: 60 * time.Minute},
+		}
+
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target:          target,
+			ReferenceTime:   referenceTime,
+			HistoricalByJob: historical,
+		})
+
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.Equal(t, "job_upstream", matched[0].IncidentKey.JobName.String())
+		// the marker is what tells the recipient the miss can still be prevented
+		assert.Equal(t, scheduler.BreachStatusPotential, matched[0].BreachStatus)
+		assert.False(t, matched[0].Reason.IsJobFinished, "the cause is still running")
+	})
+
+	t.Run("an at-risk target with no cause produces no detection, not AGGRESSIVE_SLA", func(t *testing.T) {
+		// everything healthy: the upstream already finished well within its baseline
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-50*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+		target.IsPotentiallyBreaching = true
+
+		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+			"job_upstream": {TaskDuration: 60 * time.Minute},
+			"job_target":   {TaskDuration: 60 * time.Minute},
+		}
+
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target:          target,
+			ReferenceTime:   referenceTime,
+			HistoricalByJob: historical,
+		})
+
+		// AGGRESSIVE_SLA requires an actual missed deadline — a predicted miss with no
+		// cause says nothing about the SLA yet
+		assert.Empty(t, detections)
+	})
+}

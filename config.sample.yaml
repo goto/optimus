@@ -151,6 +151,19 @@ alerting:
     # Invalid or empty values fall back to WARNING. CRITICAL also marks the alert
     # environment as production.
     alert_severity: WARNING
+    # AlertSuppression mutes ALERTS without affecting detection or persistence: the
+    # incidents are still recorded and visible in the API and dashboards.
+    alert_suppression:
+      # Reasons whose alerts are not sent. Valid values (case-insensitive):
+      # RUNTIME_DELAY, SCHEDULER_DELAY, THIRD_PARTY_DELAY, FAILED_UPSTREAM,
+      # WAITING_UPSTREAM, AGGRESSIVE_SLA.
+      skip_reasons: []
+      # Floor for alerting on a measured delay: a reason whose induced delay is below
+      # this many minutes is recorded but not alerted. 0 disables the floor. Only
+      # applies to delay-measuring reasons (RUNTIME_DELAY, SCHEDULER_DELAY,
+      # THIRD_PARTY_DELAY); FAILED_UPSTREAM, WAITING_UPSTREAM and AGGRESSIVE_SLA carry
+      # no measured delay and are never affected — use skip_reasons for those.
+      min_total_induced_delay_minutes: 0
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

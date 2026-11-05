@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -243,6 +244,15 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 	}
 	for _, incident := range incidents {
 		for _, reason := range incident.Incident.ActiveReasons() {
+			if s.suppressAlert(reason) {
+				rootCauseAlertsSuppressedTotal.WithLabelValues(string(reason.Reason)).Inc()
+				s.l.Info("root-cause alert suppressed by configuration, incident still recorded",
+					"reason", string(reason.Reason),
+					"project", incident.Incident.Key.ProjectName.String(),
+					"job", incident.Incident.Key.JobName.String(),
+					"induced_delay_seconds", reason.InducedDelaySeconds)
+				continue
+			}
 			team := s.routeTeam(ctx, incident.Incident.Key.ProjectName, reason.Reason)
 			if team == "" {
 				s.l.Debug("no routing team for root-cause reason, skipping alert",
@@ -270,6 +280,29 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 				return alert
 			}())
 		}
+	}
+}
+
+func (s *JobRootCauseService) suppressAlert(reason scheduler.RootCauseReasonDetail) bool {
+	for _, skipped := range s.config.AlertSuppression.SkipReasons {
+		if strings.EqualFold(strings.TrimSpace(skipped), string(reason.Reason)) {
+			return true
+		}
+	}
+
+	if !isDelayMeasuredReason(reason.Reason) {
+		return false
+	}
+	minSeconds := s.config.AlertSuppression.MinTotalInducedDelayMinutes * 60
+	return reason.InducedDelaySeconds < minSeconds
+}
+
+func isDelayMeasuredReason(reason scheduler.SLABreachTier) bool {
+	switch reason {
+	case scheduler.TierRuntimeDelay, scheduler.TierSchedulerDelay, scheduler.TierThirdPartyDelay:
+		return true
+	default:
+		return false
 	}
 }
 

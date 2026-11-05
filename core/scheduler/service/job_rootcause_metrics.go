@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	MetricRootCauseEvaluations = "rootcause_evaluations_total"
-	MetricRootCauseDetections  = "rootcause_detections_total"
+	MetricRootCauseEvaluations      = "rootcause_evaluations_total"
+	MetricRootCauseDetections       = "rootcause_detections_total"
+	MetricRootCauseAlertsSuppressed = "rootcause_alerts_suppressed_total"
 )
 
 var (
@@ -18,6 +19,10 @@ var (
 	rootCauseDetectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: MetricRootCauseDetections,
 	}, []string{"reason", "project"})
+
+	rootCauseAlertsSuppressedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricRootCauseAlertsSuppressed,
+	}, []string{"reason"})
 )
 
 // recordEvaluation counts one publisher tick: errored when the batch failed, empty when it

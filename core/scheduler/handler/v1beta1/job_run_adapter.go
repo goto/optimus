@@ -262,6 +262,10 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 				IsBlocking:         run.IsBlocking,
 				DownstreamRefs:     toJobRunRefsProto(run.DownstreamRefs),
 			}
+			if run.InferredSLA != nil {
+				pbJobRun.InferredSlaTime = timestamppb.New(*run.InferredSLA)
+			}
+			pbJobRun.IsPotentialBreachCause = run.IsPotentialBreachCause
 			if run.DelaySummary != nil {
 				pbJobRun.DelaySummary = &pb.JobRunDelaySummary{
 					ScheduledWayTooLateSeconds:   int32(run.DelaySummary.ScheduledWayTooLateSeconds),
@@ -295,12 +299,13 @@ func toJobRunLineageSummaryResponse(jobRunLineages []*scheduler.JobRunLineage) *
 		}
 
 		pbJobRunLineages = append(pbJobRunLineages, &pb.JobRunLineageSummary{
-			JobName:     lineage.JobName.String(),
-			ProjectName: lineage.ProjectName.String(),
-			ScheduledAt: timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
-			JobRuns:     pbJobRuns,
-			TotalNodes:  int32(lineage.TotalNodes),
-			Truncated:   lineage.Truncated,
+			JobName:                lineage.JobName.String(),
+			ProjectName:            lineage.ProjectName.String(),
+			ScheduledAt:            timestamppb.New(lineage.JobRuns[0].JobRunSummary.ScheduledAt),
+			JobRuns:                pbJobRuns,
+			TotalNodes:             int32(lineage.TotalNodes),
+			Truncated:              lineage.Truncated,
+			IsPotentiallyBreaching: lineage.IsPotentiallyBreaching,
 			ExecutionSummary: &pb.LineageExecutionSummary{
 				TotalScheduledWayTooLateSeconds:     int32(lineage.ExecutionSummary.TotalScheduledWayTooLateSeconds),
 				TotalSystemSchedulingDelaySeconds:   int32(lineage.ExecutionSummary.TotalSystemSchedulingDelaySeconds),

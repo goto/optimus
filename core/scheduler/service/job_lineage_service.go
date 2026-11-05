@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
+	"github.com/goto/optimus/core/scheduler/rootcause"
 )
 
 // Contract that can be used by other callers to fetch job lineage information
@@ -29,6 +32,10 @@ type JobLineageService struct {
 	lineageWindowHours           int
 	historicalDurationLastNRuns  int
 	historicalDurationPercentile int
+	// potential-breach prediction (see config.JobExecutionSummaryConfig.PotentialBreach)
+	potentialBreachEnabled bool
+	damperFactor           scheduler.DamperFactor
+	now                    func() time.Time
 }
 
 // GetJobExecutionSummary returns the upstream lineage of each target run, deduplicated per
@@ -59,16 +66,31 @@ func (j *JobLineageService) GetJobExecutionSummary(ctx context.Context, jobSched
 }
 
 func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context, lineagesMap map[*scheduler.JobSchedule]*scheduler.JobLineageSummary, walkOpts scheduler.LineageWalkOptions) ([]*scheduler.JobRunLineage, error) {
+	type pair struct {
+		tree    *scheduler.JobLineageSummary
+		lineage *scheduler.JobRunLineage
+	}
+
 	var result []*scheduler.JobRunLineage
+	pairs := make([]pair, 0, len(lineagesMap))
 	for _, lineage := range lineagesMap {
 		newDownstreamLineage := lineage
 		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(walkOpts)
 		result = append(result, jobRunLineage)
+		pairs = append(pairs, pair{tree: lineage, lineage: jobRunLineage})
 	}
 
 	if err := j.enrichWithHistoricalDurations(ctx, result); err != nil {
 		j.l.Error("failed to enrich job run lineage with historical durations", "error", err)
 		// prioritize returning the lineage information even if the enrichment fails
+	}
+
+	// the prediction runs after the enrichment: the duration estimates it needs are the
+	// per-node historical baselines filled in above
+	if j.potentialBreachEnabled {
+		for _, p := range pairs {
+			j.annotatePotentialBreaches(p.tree, p.lineage)
+		}
 	}
 
 	return result, nil
@@ -195,6 +217,7 @@ func NewJobLineageService(
 	historicalDurationPercentile int,
 	maxLineageDepth int,
 	lineageWindowHours int,
+	potentialBreach config.PotentialBreachPredictionConfig,
 ) *JobLineageService {
 	if lineageWindowHours <= 0 {
 		lineageWindowHours = DefaultLineageWindowHours
@@ -208,5 +231,96 @@ func NewJobLineageService(
 		historicalDurationPercentile: historicalDurationPercentile,
 		maxLineageDepth:              maxLineageDepth,
 		lineageWindowHours:           lineageWindowHours,
+		potentialBreachEnabled:       potentialBreach.Enable,
+		damperFactor:                 damperFactorFromConfig(potentialBreach.DamperFactor),
+		now:                          time.Now,
 	}
+}
+
+// damperFactorFromConfig maps the config's method string onto the damper behavior; an
+// unknown method falls back to the exponential default.
+func damperFactorFromConfig(damper config.DamperPredictionConfig) scheduler.DamperFactor {
+	method := scheduler.DamperFactorMethodExponential
+	switch strings.ToUpper(damper.Method) {
+	case "APPLY_METHOD_DECREMENT":
+		method = scheduler.DamperFactorMethodDecrement
+	case "APPLY_METHOD_CONSTANT":
+		method = scheduler.DamperFactorMethodConstant
+	}
+	return scheduler.DamperFactor{
+		BaseValue: damper.BaseValue,
+		Alpha:     damper.Alpha,
+		MinValue:  damper.MinValue,
+		Method:    method,
+	}
+}
+
+// annotatePotentialBreaches predicts whether the target run is heading for an SLA miss:
+// every wait-chain node gets an inferred deadline (the target's SLA minus damped estimated
+// durations down the chain) and is flagged when its current state endangers that deadline.
+// A predicted miss with the target's own deadline still in the future marks the lineage
+// IsPotentiallyBreaching; once the deadline has passed the breach is actual and the
+// root-cause publisher's reactive semantics take over.
+func (j *JobLineageService) annotatePotentialBreaches(tree *scheduler.JobLineageSummary, result *scheduler.JobRunLineage) {
+	targetRun := tree.GetRunForJob(tree.JobName)
+	if targetRun == nil || targetRun.SLATime == nil || targetRun.SLATime.Equal(targetRun.ScheduledAt) {
+		return // no SLA configured: nothing to predict against
+	}
+	now := j.now()
+
+	// duration estimates per node come from the enrichment above
+	durations := make(map[scheduler.JobName]*time.Duration, len(result.JobRuns))
+	for _, node := range result.JobRuns {
+		if node.HistoricalSummary.TaskDuration > 0 {
+			duration := node.HistoricalSummary.TaskDuration
+			durations[node.JobName] = &duration
+		}
+	}
+
+	identifier := rootcause.NewIdentifier(j.l, nil, nil, nil, rootcause.IdentifierConfig{})
+	inferredSLAs, _ := identifier.CalculateInferredSLAs(tree, durations, targetRun.SLATime, j.damperFactor)
+
+	potentialCause := false
+	for _, node := range result.JobRuns {
+		inferredSLA, ok := inferredSLAs[node.JobName]
+		if !ok {
+			continue
+		}
+		node.InferredSLA = inferredSLA
+		if potentialBreachCause(node, inferredSLA, now) {
+			node.IsPotentialBreachCause = true
+			potentialCause = true
+		}
+	}
+
+	if potentialCause && !jobRunBreached(targetRun, now) {
+		result.IsPotentiallyBreaching = true
+	}
+}
+
+// potentialBreachCause flags a node whose current state endangers its inferred deadline:
+// finished after it, still running past it, or not started by the latest start its own
+// duration estimate allows.
+func potentialBreachCause(node *scheduler.JobExecutionSummary, inferredSLA *time.Time, now time.Time) bool {
+	run := node.JobRunSummary
+	switch {
+	case run.IsFinished():
+		end := run.GetActualEndTime()
+		return end.After(*inferredSLA)
+	case run.TaskStartTime != nil:
+		return now.After(*inferredSLA)
+	default:
+		return now.After(inferredSLA.Add(-node.HistoricalSummary.TaskDuration))
+	}
+}
+
+// jobRunBreached mirrors the root-cause publisher's breach gate for a single run.
+func jobRunBreached(run *scheduler.JobRunSummary, now time.Time) bool {
+	if run.SLATime == nil {
+		return false
+	}
+	if end := run.GetActualEndTime(); end != nil {
+		return end.After(*run.SLATime)
+	}
+	return now.After(*run.SLATime)
 }

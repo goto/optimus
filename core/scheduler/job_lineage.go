@@ -561,6 +561,11 @@ type JobRunLineage struct {
 	// stopped it short of the full lineage.
 	TotalNodes int
 	Truncated  bool
+	// IsPotentiallyBreaching predicts that this run will miss its SLA: at least one
+	// wait-chain node is past the inferred deadline the target's SLA imposes on it, while
+	// the target's own deadline has not passed yet. Computed when the potential-breach
+	// prediction is enabled in the lineage summary config.
+	IsPotentiallyBreaching bool
 }
 
 type LineageExecutionSummary struct {
@@ -612,6 +617,15 @@ type JobExecutionSummary struct {
 	IsBlocking        bool
 	DelaySummary      *JobRunDelaySummary
 	HistoricalSummary JobHistoricalDuration
+	// InferredSLA is the latest this run may finish for the TARGET run to still make its
+	// SLA (the target's SLA minus damped estimated durations down the chain). Computed
+	// when the potential-breach prediction is enabled; nodes without duration estimates
+	// on their path have none.
+	InferredSLA *time.Time
+	// IsPotentialBreachCause flags a node whose current state endangers its inferred
+	// deadline: finished after it, still running past it, or not started by the latest
+	// start its estimate allows.
+	IsPotentialBreachCause bool
 }
 
 func (j *JobExecutionSummary) Key() JobRunKey {

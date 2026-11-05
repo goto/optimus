@@ -266,6 +266,19 @@ job_execution_summary:
   historical_duration:
     last_n_runs: 7
     percentile: 95
+  # PotentialBreach predicts whether a target run is heading for an SLA miss before its
+  # deadline passes: every wait-chain node gets an inferred deadline (the target's SLA
+  # minus damped estimated durations) and is flagged when its current state endangers
+  # that deadline. The root-cause publisher uses this to alert on potential breaches.
+  potential_breach:
+    enable: false
+    damper_factor:
+      base_value: 1.0
+      # alpha < 1 relaxes the deadline requirement for deeper upstreams (0.94 shown)
+      alpha: 1.0
+      min_value: 0
+      # APPLY_METHOD_EXPONENTIAL (default), APPLY_METHOD_DECREMENT or APPLY_METHOD_CONSTANT
+      method: APPLY_METHOD_EXPONENTIAL
 
 # manual-state-override reconciliation worker; window_interval_in_seconds: 0 disables it
 airflow_sync:

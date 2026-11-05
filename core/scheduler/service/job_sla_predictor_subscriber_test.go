@@ -31,6 +31,14 @@ func (m *mockSubscriberIncidentRepo) GetActiveIncidents(ctx context.Context, sin
 	return nil, args.Error(1)
 }
 
+func (m *mockSubscriberIncidentRepo) GetIncidentByKey(ctx context.Context, key scheduler.SLABreachIncidentKey) (*scheduler.SLABreachIncident, error) {
+	args := m.Called(ctx, key)
+	if incident, ok := args.Get(0).(*scheduler.SLABreachIncident); ok {
+		return incident, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func TestIdentifySLABreachesBatch_SubscriberMode(t *testing.T) {
 	ctx := context.Background()
 	l := log.NewNoop()

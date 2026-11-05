@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 	"github.com/goto/salt/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -271,7 +270,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
-		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
 		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once().
 			Run(func(args mock.Arguments) {
@@ -382,7 +381,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
-		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
 		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 
@@ -430,7 +429,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
-		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
 		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 
@@ -610,7 +609,7 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 
 		detailsGetter, lineageFetcher, estimator := deps(t, lineage, durations)
 		repo := &mockIncidentRepository{}
-		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
 		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 		if notifier == nil {

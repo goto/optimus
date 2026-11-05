@@ -236,7 +236,13 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig Ro
 		freshKeys[incident.Incident.Key] = true
 
 		previous, err := s.incidentRepo.GetIncidentByKey(ctx, incident.Incident.Key)
-		if err != nil {
+		switch {
+		case err == nil:
+			// found: merge against the stored state
+		case errors.Is(err, scheduler.ErrSLABreachIncidentNotFound):
+			// first write of this incident: nothing to resolve yet
+			previous = nil
+		default:
 			s.l.Error("failed to read previous incident state, recording without resolution flip",
 				"project", incident.Incident.Key.ProjectName.String(),
 				"job", incident.Incident.Key.JobName.String(),

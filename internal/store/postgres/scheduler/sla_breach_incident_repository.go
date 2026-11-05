@@ -157,8 +157,9 @@ func (r *SLABreachIncidentRepository) GetActiveIncidents(ctx context.Context, si
 	return results, nil
 }
 
-// GetIncidentByKey returns the currently stored incident for the key, or nil when none
-// exists yet — the publisher reads it to flip disappeared reasons to resolved.
+// GetIncidentByKey returns the currently stored incident for the key, or
+// ErrSLABreachIncidentNotFound when none exists yet. The publisher reads it to flip
+// disappeared reasons to resolved.
 func (r *SLABreachIncidentRepository) GetIncidentByKey(ctx context.Context, key scheduler.SLABreachIncidentKey) (*scheduler.SLABreachIncident, error) {
 	query := `
 		SELECT id, project_name, job_name, scheduled_at, details,
@@ -177,7 +178,7 @@ func (r *SLABreachIncidentRepository) GetIncidentByKey(ctx context.Context, key 
 	).Scan(&id, &projectName, &jobName, &scheduledAt, &rawDetails, &maxInducedDelaySeconds, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, scheduler.ErrSLABreachIncidentNotFound
 		}
 		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error reading SLA breach incident by key", err)
 	}
@@ -210,7 +211,12 @@ func newIncidentKey(projectName, jobName string, scheduledAt time.Time) (schedul
 	if err != nil {
 		return scheduler.SLABreachIncidentKey{}, errors.Wrap(scheduler.EntitySLABreachIncident, "error adapting job name", err)
 	}
-	return scheduler.SLABreachIncidentKey{ProjectName: project, JobName: job, ScheduledAt: scheduledAt}, nil
+	// normalize to UTC: pgx scans TIMESTAMPTZ into the connection's timezone, and
+	// SLABreachIncidentKey is used as a map key where time.Time equality compares the
+	// location — an unnormalized read-side key would never match the evaluator's UTC keys
+	// (worst case: the resolution pass would treat a freshly detected incident as
+	// untouched and resolve it in the same tick).
+	return scheduler.SLABreachIncidentKey{ProjectName: project, JobName: job, ScheduledAt: scheduledAt.UTC()}, nil
 }
 
 var _ scheduler.SLABreachIncidentRepository = (*SLABreachIncidentRepository)(nil)

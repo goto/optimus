@@ -112,7 +112,7 @@ func TestPostgresSLABreachIncidentRepository(t *testing.T) {
 
 	t.Run("GetIncidentByKey", func(t *testing.T) {
 		t.Run("returns the stored incident for its key", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewSLABreachIncidentRepository(db)
 			incident := newIncident()
 			assert.NoError(t, repo.UpsertIncident(ctx, incident, []scheduler.ImpactedJob{impactedA}))
@@ -127,7 +127,7 @@ func TestPostgresSLABreachIncidentRepository(t *testing.T) {
 		})
 
 		t.Run("returns nil for an unknown key", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			repo := postgres.NewSLABreachIncidentRepository(db)
 
 			stored, err := repo.GetIncidentByKey(ctx, scheduler.SLABreachIncidentKey{
@@ -135,8 +135,8 @@ func TestPostgresSLABreachIncidentRepository(t *testing.T) {
 				JobName:     "job_unknown",
 				ScheduledAt: scheduledAt,
 			})
-			assert.NoError(t, err)
 			assert.Nil(t, stored)
+			assert.ErrorIs(t, err, scheduler.ErrSLABreachIncidentNotFound)
 		})
 	})
 }

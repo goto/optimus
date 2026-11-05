@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -33,6 +34,11 @@ const (
 type ReasonStatus string
 
 const EntitySLABreachIncident = "slaBreachIncident"
+
+// ErrSLABreachIncidentNotFound is returned by the incident repository when no incident
+// exists for the given key — the publisher's first write of an incident, for example.
+// The caller decides whether that is the expected first-write path or something to log.
+var ErrSLABreachIncidentNotFound = errors.New("sla breach incident not found")
 
 const (
 	ReasonStatusActive   ReasonStatus = "active"
@@ -240,8 +246,9 @@ func MergeResolvedReasons(fresh, previous *SLABreachIncident) *SLABreachIncident
 type SLABreachIncidentRepository interface {
 	UpsertIncident(ctx context.Context, incident *SLABreachIncident, impactedJobs []ImpactedJob) error
 	GetActiveIncidents(ctx context.Context, since time.Time) ([]*SLABreachIncidentWithImpacts, error)
-	// GetIncidentByKey returns the currently stored incident for the key, or nil when
-	// none exists yet. The publisher reads it to flip disappeared reasons to resolved.
+	// GetIncidentByKey returns the currently stored incident for the key, or
+	// ErrSLABreachIncidentNotFound when none exists yet. The publisher reads it to flip
+	// disappeared reasons to resolved.
 	GetIncidentByKey(ctx context.Context, key SLABreachIncidentKey) (*SLABreachIncident, error)
 }
 

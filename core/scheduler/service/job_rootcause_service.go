@@ -35,11 +35,27 @@ type JobRootCauseService struct {
 	durationEstimator DurationEstimator
 	incidentRepo      scheduler.SLABreachIncidentRepository
 	publisher         *rootcause.Publisher
+	// alert routing
+	rootCauseNotifier RootCauseBreachNotifier
+	projectTeamGetter ProjectTeamGetter
+	teamCache         map[tenant.ProjectName]string
+}
+
+// RootCauseBreachNotifier relays one root-cause breach alert; implemented by the
+// alertmanager notifier.
+type RootCauseBreachNotifier interface {
+	SendRootCauseBreach(alert *scheduler.RootCauseBreachAlert)
+}
+
+// ProjectTeamGetter resolves the alerting team configured on a project.
+type ProjectTeamGetter interface {
+	Get(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error)
 }
 
 func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jobDetailsGetter JobDetailsGetter,
 	jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator,
 	incidentRepo scheduler.SLABreachIncidentRepository, thirdPartyTypes []string,
+	rootCauseNotifier RootCauseBreachNotifier, projectTeamGetter ProjectTeamGetter,
 ) *JobRootCauseService {
 	return &JobRootCauseService{
 		l:                 l,
@@ -48,6 +64,9 @@ func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jo
 		jobLineageFetcher: jobLineageFetcher,
 		durationEstimator: durationEstimator,
 		incidentRepo:      incidentRepo,
+		rootCauseNotifier: rootCauseNotifier,
+		projectTeamGetter: projectTeamGetter,
+		teamCache:         map[tenant.ProjectName]string{},
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
 			RuntimeDelayThreshold:       time.Duration(config.RuntimeDelayThresholdMinutes) * time.Minute,
 			SchedulerDelayPerDepth:      time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
@@ -59,8 +78,9 @@ func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jo
 }
 
 // IdentifySLABreachRootCause evaluates every (project, labels) target set, groups the tier
-// detections into incidents and — unless running in observe mode — persists them. The
-// returned incidents carry the full assembled details and blast radius.
+// detections into incidents and — unless running in observe mode — persists them and alerts
+// the responsible teams. The returned incidents carry the full assembled details and blast
+// radius.
 func (s *JobRootCauseService) IdentifySLABreachRootCause(ctx context.Context, reqConfig RootCauseRequestConfig) ([]*scheduler.SLABreachIncidentWithImpacts, error) {
 	excluded := map[tenant.ProjectName]bool{}
 	for _, projectName := range s.config.ExcludeProjects {
@@ -87,8 +107,14 @@ func (s *JobRootCauseService) IdentifySLABreachRootCause(ctx context.Context, re
 	incidents := scheduler.GroupDetections(allDetections)
 	s.l.Info("root-cause evaluation produced incidents", "detections", len(allDetections), "incidents", len(incidents))
 
+	s.recordEvaluation(me.ToErr() != nil, len(incidents))
+	for _, detection := range allDetections {
+		rootCauseDetectionsTotal.WithLabelValues(string(detection.Reason.Reason), detection.IncidentKey.ProjectName.String()).Inc()
+	}
+
 	if reqConfig.EnableAlert {
 		s.persistIncidents(ctx, incidents)
+		s.sendRootCauseAlerts(ctx, incidents)
 	}
 	return incidents, me.ToErr()
 }
@@ -205,4 +231,82 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, incidents []
 				"error", err)
 		}
 	}
+}
+
+// sendRootCauseAlerts routes one alert per active reason: platform-attributed reasons go to
+// their configured team, everything else to the root-cause project's owner. An empty team
+// (unset config or no ALERTMANAGER_TEAM on the project) disables that route. Repetition is
+// suppressed downstream by the alert_logs deduplication for the rootcause_breach type.
+func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts) {
+	if s.rootCauseNotifier == nil {
+		return
+	}
+	for _, incident := range incidents {
+		for _, reason := range incident.Incident.ActiveReasons() {
+			team := s.routeTeam(ctx, incident.Incident.Key.ProjectName, reason.Reason)
+			if team == "" {
+				s.l.Debug("no routing team for root-cause reason, skipping alert",
+					"reason", string(reason.Reason),
+					"project", incident.Incident.Key.ProjectName.String())
+				continue
+			}
+			s.rootCauseNotifier.SendRootCauseBreach(func() *scheduler.RootCauseBreachAlert {
+				alert := &scheduler.RootCauseBreachAlert{
+					Team:                 team,
+					Project:              incident.Incident.Key.ProjectName.String(),
+					RootCauseProject:     incident.Incident.Key.ProjectName.String(),
+					RootCauseJob:         incident.Incident.Key.JobName.String(),
+					RootCauseScheduledAt: &incident.Incident.Key.ScheduledAt,
+					Reason:               reason,
+					ImpactedJobs:         impactedJobNames(incident.Impacts),
+				}
+				// scheduler-attributed alerts drop the per-run identity so the alert_logs
+				// deduplication collapses every backed-up run into one platform alert
+				if reason.Reason == scheduler.TierSchedulerDelay {
+					alert.RootCauseJob = ""
+					alert.RootCauseScheduledAt = nil
+				}
+				return alert
+			}())
+		}
+	}
+}
+
+func (s *JobRootCauseService) routeTeam(ctx context.Context, projectName tenant.ProjectName, reason scheduler.SLABreachTier) string {
+	switch reason {
+	case scheduler.TierSchedulerDelay:
+		return s.config.InfraTeam
+	case scheduler.TierThirdPartyDelay:
+		return s.config.ThirdPartyTeam
+	default:
+		return s.projectOwnerTeam(ctx, projectName)
+	}
+}
+
+// projectOwnerTeam reads ALERTMANAGER_TEAM from the project config, caching the result
+// (including misses) so repeated incidents of one tick do not re-query.
+func (s *JobRootCauseService) projectOwnerTeam(ctx context.Context, projectName tenant.ProjectName) string {
+	if team, ok := s.teamCache[projectName]; ok {
+		return team
+	}
+	team := ""
+	project, err := s.projectTeamGetter.Get(ctx, projectName)
+	if err != nil {
+		s.l.Error("failed to get project for root-cause routing", "project", projectName.String(), "error", err)
+	} else if configured, err := project.GetConfig(tenant.ProjectAlertManagerTeam); err != nil || configured == "" {
+		s.l.Warn("no alertmanager team configured for project, skipping root-cause alert", "project", projectName.String())
+	} else {
+		team = configured
+	}
+	s.teamCache[projectName] = team
+	return team
+}
+
+// impactedJobNames renders the blast radius as project-qualified job names for the payload.
+func impactedJobNames(impacts []scheduler.ImpactedJob) []string {
+	names := make([]string, 0, len(impacts))
+	for _, impacted := range impacts {
+		names = append(names, impacted.ProjectName.String()+"/"+impacted.JobName.String())
+	}
+	return names
 }

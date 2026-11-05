@@ -340,6 +340,10 @@ func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBre
 	if alert.Reason.SourceType != "" {
 		data["source_type"] = alert.Reason.SourceType
 	}
+	// potential = the predicted miss has not materialized yet; actual = the deadline passed
+	if alert.BreachStatus != "" {
+		data["breach_status"] = string(alert.BreachStatus)
+	}
 	// present only when the offending run has finished: the template renders the
 	// "root cause has finished, impact is final" line from this key
 	if alert.Reason.IsJobFinished {

@@ -40,6 +40,9 @@ type JobRootCauseService struct {
 	rootCauseNotifier RootCauseBreachNotifier
 	projectTeamGetter ProjectTeamGetter
 	teamCache         map[tenant.ProjectName]string
+	// lineageAnnotator stamps the potential-breach prediction onto the lineage trees
+	// (implemented by JobLineageService); nil keeps the reactive-only gate
+	lineageAnnotator PotentialBreachAnnotator
 }
 
 // RootCauseBreachNotifier relays one root-cause breach alert; implemented by the
@@ -53,10 +56,17 @@ type ProjectTeamGetter interface {
 	Get(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error)
 }
 
+// PotentialBreachAnnotator computes the potential-breach prediction onto lineage trees,
+// using the caller's duration estimates. Implemented by JobLineageService.
+type PotentialBreachAnnotator interface {
+	AnnotatePotentialBreaches(roots map[scheduler.JobName]*scheduler.JobLineageSummary, durationsByJob map[scheduler.JobName]*time.Duration, referenceTime time.Time)
+}
+
 func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jobDetailsGetter JobDetailsGetter,
 	jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator,
 	incidentRepo scheduler.SLABreachIncidentRepository, thirdPartyTypes []string,
 	rootCauseNotifier RootCauseBreachNotifier, projectTeamGetter ProjectTeamGetter,
+	lineageAnnotator PotentialBreachAnnotator,
 ) *JobRootCauseService {
 	return &JobRootCauseService{
 		l:                 l,
@@ -68,6 +78,7 @@ func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jo
 		rootCauseNotifier: rootCauseNotifier,
 		projectTeamGetter: projectTeamGetter,
 		teamCache:         map[tenant.ProjectName]string{},
+		lineageAnnotator:  lineageAnnotator,
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
 			RuntimeDelayThreshold:       time.Duration(config.RuntimeDelayThresholdMinutes) * time.Minute,
 			SchedulerDelayPerDepth:      time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
@@ -143,9 +154,16 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 	}
 
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
-	historicalByJob, err := s.fetchHistoricalDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames, jobsWithLineageMap)
+	historicalByJob, taskDurations, err := s.fetchHistoricalDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames, jobsWithLineageMap)
 	if err != nil {
 		return nil, err
+	}
+
+	// the potential-breach prediction is computed on the trees with the same duration
+	// estimates the reason detectors use, before evaluation widens the gate to at-risk
+	// targets
+	if s.lineageAnnotator != nil {
+		s.lineageAnnotator.AnnotatePotentialBreaches(jobsWithLineageMap, taskDurations, reqConfig.ReferenceTime)
 	}
 
 	var detections []scheduler.RootCauseDetection
@@ -164,13 +182,14 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 }
 
 // fetchHistoricalDurations builds the per-job historical task/hook baseline the Tier 1
-// induced-delay math compares against. Jobs without history evaluate against a zero baseline.
-func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) (map[scheduler.JobName]scheduler.JobHistoricalDuration, error) {
+// induced-delay math compares against, and returns the task estimates separately for the
+// potential-breach prediction. Jobs without history evaluate against a zero baseline.
+func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) (map[scheduler.JobName]scheduler.JobHistoricalDuration, map[scheduler.JobName]*time.Duration, error) {
 	historical := make(map[scheduler.JobName]scheduler.JobHistoricalDuration, len(jobNames))
 
 	taskDurations, err := s.durationEstimator.GetPercentileDurationByJobNamesByTask(ctx, referenceTime, jobNames)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, jobName := range jobNames {
 		if duration := taskDurations[jobName]; duration != nil {
@@ -180,11 +199,11 @@ func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, refe
 
 	hookNames := collectHookNames(jobsWithLineage)
 	if len(hookNames) == 0 {
-		return historical, nil
+		return historical, taskDurations, nil
 	}
 	hookDurations, err := s.durationEstimator.GetPercentileDurationByJobNamesByHookName(ctx, referenceTime, jobNames, hookNames)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, jobName := range jobNames {
 		if duration := hookDurations[jobName]; duration != nil {
@@ -193,7 +212,7 @@ func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, refe
 			historical[jobName] = entry
 		}
 	}
-	return historical, nil
+	return historical, taskDurations, nil
 }
 
 // collectHookNames gathers every distinct hook name in the lineages so the hook baseline
@@ -360,6 +379,7 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 					Reason:               reason,
 					ImpactedJobs:         impactedJobNames(incident.Impacts),
 					Severity:             s.config.AlertSeverity,
+					BreachStatus:         incident.Incident.Details.BreachStatus,
 				}
 				// scheduler-attributed alerts drop the per-run identity so the alert_logs
 				// deduplication collapses every backed-up run into one platform alert

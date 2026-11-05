@@ -125,6 +125,15 @@ type JobLineageSummary struct {
 
 	// JobRuns contain the mapping of downstream's job name to their respective job run summaries
 	JobRuns map[JobName]*JobRunSummary
+
+	// Potential-breach prediction, computed when enabled in the lineage summary config:
+	// InferredSLA is the latest this run may finish for the TARGET run to still make its
+	// SLA, IsPotentialBreachCause flags a run endangering that deadline, and
+	// IsPotentiallyBreaching (meaningful on the tree root) predicts the target run is
+	// heading for a miss while its own deadline has not passed yet.
+	InferredSLA            *time.Time
+	IsPotentialBreachCause bool
+	IsPotentiallyBreaching bool
 }
 
 func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {

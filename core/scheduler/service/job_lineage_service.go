@@ -260,15 +260,9 @@ func damperFactorFromConfig(damper config.DamperPredictionConfig) scheduler.Damp
 // durations down the chain) and is flagged when its current state endangers that deadline.
 // A predicted miss with the target's own deadline still in the future marks the lineage
 // IsPotentiallyBreaching; once the deadline has passed the breach is actual and the
-// root-cause publisher's reactive semantics take over.
+// root-cause publisher's reactive semantics take over. The duration estimates come from
+// the enrichment above.
 func (j *JobLineageService) annotatePotentialBreaches(tree *scheduler.JobLineageSummary, result *scheduler.JobRunLineage) {
-	targetRun := tree.GetRunForJob(tree.JobName)
-	if targetRun == nil || targetRun.SLATime == nil || targetRun.SLATime.Equal(targetRun.ScheduledAt) {
-		return // no SLA configured: nothing to predict against
-	}
-	now := j.now()
-
-	// duration estimates per node come from the enrichment above
 	durations := make(map[scheduler.JobName]*time.Duration, len(result.JobRuns))
 	for _, node := range result.JobRuns {
 		if node.HistoricalSummary.TaskDuration > 0 {
@@ -277,32 +271,110 @@ func (j *JobLineageService) annotatePotentialBreaches(tree *scheduler.JobLineage
 		}
 	}
 
+	j.annotateTree(tree, durations, j.now())
+
+	// mirror the tree annotation onto the flattened response nodes
+	result.IsPotentiallyBreaching = tree.IsPotentiallyBreaching
+	for _, node := range result.JobRuns {
+		if treeNode := findTreeNode(tree, node.JobName); treeNode != nil {
+			node.InferredSLA = treeNode.InferredSLA
+			node.IsPotentialBreachCause = treeNode.IsPotentialBreachCause
+		}
+	}
+}
+
+// AnnotatePotentialBreaches computes the potential-breach prediction directly on lineage
+// trees, using caller-provided duration estimates (the publisher's baselines). Trees
+// without a target SLA are left untouched, as is everything when the prediction is
+// disabled in the config.
+func (j *JobLineageService) AnnotatePotentialBreaches(roots map[scheduler.JobName]*scheduler.JobLineageSummary, durationsByJob map[scheduler.JobName]*time.Duration, referenceTime time.Time) {
+	if !j.potentialBreachEnabled {
+		return
+	}
+	for _, tree := range roots {
+		j.annotateTree(tree, durationsByJob, referenceTime)
+	}
+}
+
+// annotateTree flags the tree's nodes against the inferred deadlines the target's SLA
+// imposes, and marks the root IsPotentiallyBreaching when a cause exists while the
+// target's own deadline has not passed yet.
+func (j *JobLineageService) annotateTree(tree *scheduler.JobLineageSummary, durationsByJob map[scheduler.JobName]*time.Duration, now time.Time) {
+	targetRun := tree.GetRunForJob(tree.JobName)
+	if targetRun == nil || targetRun.SLATime == nil || targetRun.SLATime.Equal(targetRun.ScheduledAt) {
+		return // no SLA configured: nothing to predict against
+	}
+
 	identifier := rootcause.NewIdentifier(j.l, nil, nil, nil, rootcause.IdentifierConfig{})
-	inferredSLAs, _ := identifier.CalculateInferredSLAs(tree, durations, targetRun.SLATime, j.damperFactor)
+	inferredSLAs, _ := identifier.CalculateInferredSLAs(tree, durationsByJob, targetRun.SLATime, j.damperFactor)
 
 	potentialCause := false
-	for _, node := range result.JobRuns {
+	for _, node := range collectTreeNodes(tree) {
 		inferredSLA, ok := inferredSLAs[node.JobName]
 		if !ok {
 			continue
 		}
 		node.InferredSLA = inferredSLA
-		if potentialBreachCause(node, inferredSLA, now) {
+		durationEstimate := time.Duration(0)
+		if estimate := durationsByJob[node.JobName]; estimate != nil {
+			durationEstimate = *estimate
+		}
+		nodeRun := node.GetRunForJob(node.JobName)
+		if nodeRun == nil {
+			continue
+		}
+		if potentialBreachCause(nodeRun, durationEstimate, inferredSLA, now) {
 			node.IsPotentialBreachCause = true
 			potentialCause = true
 		}
 	}
 
 	if potentialCause && !jobRunBreached(targetRun, now) {
-		result.IsPotentiallyBreaching = true
+		tree.IsPotentiallyBreaching = true
 	}
 }
 
-// potentialBreachCause flags a node whose current state endangers its inferred deadline:
-// finished after it, still running past it, or not started by the latest start its own
+// findTreeNode locates a job's node in the tree by depth-first search; a job reached
+// through several paths shares one tree node.
+func findTreeNode(tree *scheduler.JobLineageSummary, jobName scheduler.JobName) *scheduler.JobLineageSummary {
+	if tree == nil {
+		return nil
+	}
+	if tree.JobName == jobName {
+		return tree
+	}
+	for _, upstream := range tree.Upstreams {
+		if found := findTreeNode(upstream, jobName); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// collectTreeNodes gathers every node in the tree exactly once (cycles guarded by the
+// caller's path pruning, but the visited set keeps this cheap and safe).
+func collectTreeNodes(tree *scheduler.JobLineageSummary) []*scheduler.JobLineageSummary {
+	visited := map[*scheduler.JobLineageSummary]bool{}
+	var nodes []*scheduler.JobLineageSummary
+	var walk func(*scheduler.JobLineageSummary)
+	walk = func(node *scheduler.JobLineageSummary) {
+		if node == nil || visited[node] {
+			return
+		}
+		visited[node] = true
+		nodes = append(nodes, node)
+		for _, upstream := range node.Upstreams {
+			walk(upstream)
+		}
+	}
+	walk(tree)
+	return nodes
+}
+
+// potentialBreachCause flags a run whose current state endangers its inferred deadline:
+// finished after it, still running past it, or not started by the latest start its
 // duration estimate allows.
-func potentialBreachCause(node *scheduler.JobExecutionSummary, inferredSLA *time.Time, now time.Time) bool {
-	run := node.JobRunSummary
+func potentialBreachCause(run *scheduler.JobRunSummary, durationEstimate time.Duration, inferredSLA *time.Time, now time.Time) bool {
 	switch {
 	case run.IsFinished():
 		end := run.GetActualEndTime()
@@ -310,7 +382,7 @@ func potentialBreachCause(node *scheduler.JobExecutionSummary, inferredSLA *time
 	case run.TaskStartTime != nil:
 		return now.After(*inferredSLA)
 	default:
-		return now.After(inferredSLA.Add(-node.HistoricalSummary.TaskDuration))
+		return now.After(inferredSLA.Add(-durationEstimate))
 	}
 }
 

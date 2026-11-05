@@ -77,10 +77,18 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		return nil
 	}
 
-	// breach gate: the target missed its SLA deadline — finished after it, or still
-	// running past it
-	if !breachedSLA(targetRun, ev.ReferenceTime) {
+	// breach gate: the target is worth evaluating when it has already missed its SLA
+	// deadline (finished after it, or still running past it), or when the potential-breach
+	// prediction says it is heading for a miss while there is still time to act
+	breached := breachedSLA(targetRun, ev.ReferenceTime)
+	if !breached && !ev.Target.IsPotentiallyBreaching {
 		return nil
+	}
+	// an actual breach outranks a predicted one; AGGRESSIVE_SLA only ever applies to
+	// actual breaches — a predicted miss with no cause says nothing about the SLA yet
+	breachStatus := scheduler.BreachStatusActual
+	if !breached {
+		breachStatus = scheduler.BreachStatusPotential
 	}
 
 	impacted := []scheduler.ImpactedJob{{
@@ -99,14 +107,22 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierSchedulerDelay(walk, walk.GatingPath(), impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
+	for i := range detections {
+		detections[i].BreachStatus = breachStatus
+	}
 
 	// if the target breached but nothing upstream explains it, then the SLA is too
-	// aggressive for what the lineage actually delivers
+	// aggressive for what the lineage actually delivers — actual breaches only: a
+	// predicted miss with no cause says nothing about the SLA yet
 	if len(detections) == 0 {
+		if !breached {
+			return nil
+		}
 		return []scheduler.RootCauseDetection{{
 			IncidentKey:  incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
 			Reason:       scheduler.RootCauseReasonDetail{Reason: scheduler.TierAggressiveSLA, Status: scheduler.ReasonStatusActive},
 			ImpactedJobs: impacted,
+			BreachStatus: breachStatus,
 		}}
 	}
 	return detections

@@ -488,7 +488,7 @@ func (s *OptimusServer) setupHandlers() error {
 	// Root-Cause Publisher Service: persists incidents and alerts the responsible teams
 	slaBreachIncidentRepository := schedulerRepo.NewSLABreachIncidentRepository(s.dbPool)
 	newJobRootCauseService := schedulerService.NewJobRootCauseService(s.logger, s.conf.Alerting.RootCauseAlert, jobProviderRepo, jobLineageService,
-		newDurationEstimatorService, slaBreachIncidentRepository, thirdPartyUpstreamTypes, alertsHandler, tProjectService)
+		newDurationEstimatorService, slaBreachIncidentRepository, thirdPartyUpstreamTypes, alertsHandler, tProjectService, jobLineageService)
 
 	// Job Estimator Service
 	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

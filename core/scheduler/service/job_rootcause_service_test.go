@@ -251,6 +251,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			[]string{"dex"},
 			notifier,
 			teamGetter,
+			nil,
 		)
 	}
 
@@ -469,7 +470,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			log.NewNoop(),
 			config.RootCauseAlertConfig{ExcludeProjects: []string{"p_root"}},
 			&mockRootCauseDetailsGetter{}, &mockRootCauseLineageFetcher{}, &mockRootCauseDurationEstimator{},
-			repo, []string{"dex"}, notifier, &mockProjectTeamGetter{},
+			repo, []string{"dex"}, notifier, &mockProjectTeamGetter{}, nil,
 		)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
@@ -629,6 +630,7 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 			[]string{"dex"},
 			notifier,
 			teamGetter,
+			nil,
 		)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
@@ -854,6 +856,7 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 			[]string{"dex"},
 			notifier,
 			&mockProjectTeamGetter{},
+			nil,
 		)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
@@ -967,7 +970,7 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		})
 
 		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, detailsGetter, lineageFetcher,
-			estimator, newRepo(storedRunning), []string{"dex"}, notifier, teamGetter)
+			estimator, newRepo(storedRunning), []string{"dex"}, notifier, teamGetter, nil)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},
@@ -986,7 +989,7 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 
 		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, detailsGetter, lineageFetcher,
-			estimator, newRepo(storedFinished), []string{"dex"}, notifier, teamGetter)
+			estimator, newRepo(storedFinished), []string{"dex"}, notifier, teamGetter, nil)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},

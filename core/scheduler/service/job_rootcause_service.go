@@ -114,7 +114,7 @@ func (s *JobRootCauseService) IdentifySLABreachRootCause(ctx context.Context, re
 	}
 
 	if reqConfig.EnableAlert {
-		s.persistIncidents(ctx, incidents)
+		s.persistIncidents(ctx, reqConfig, incidents)
 		s.sendRootCauseAlerts(ctx, incidents)
 	}
 	return incidents, me.ToErr()
@@ -221,16 +221,85 @@ func collectHookNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineag
 	return hookNames
 }
 
-// persistIncidents writes each fully assembled incident. A failure on one incident is logged
-// and skipped so the rest still persists; the tick's findings remain the source of truth.
-func (s *JobRootCauseService) persistIncidents(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts) {
+// activeIncidentScanWindow is how far back the resolution pass looks for incidents that
+// were still active before this tick. It mirrors the subscriber's freshness window: older
+// rows are considered stale regardless and will age out anyway.
+const activeIncidentScanWindow = 24 * time.Hour
+
+// persistIncidents writes each fully assembled incident, then runs a resolution pass:
+// incidents that were active before this tick but received no fresh detection have their
+// remaining active reasons flipped to resolved. A failure on one incident is logged and
+// skipped so the rest still persists; the tick's findings remain the source of truth.
+func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig RootCauseRequestConfig, incidents []*scheduler.SLABreachIncidentWithImpacts) {
+	freshKeys := map[scheduler.SLABreachIncidentKey]bool{}
 	for _, incident := range incidents {
-		if err := s.incidentRepo.UpsertIncident(ctx, incident.Incident, incident.Impacts); err != nil {
+		freshKeys[incident.Incident.Key] = true
+
+		previous, err := s.incidentRepo.GetIncidentByKey(ctx, incident.Incident.Key)
+		switch {
+		case err == nil:
+			// found: merge against the stored state
+		case errors.Is(err, scheduler.ErrSLABreachIncidentNotFound):
+			// first write of this incident: nothing to resolve yet
+			previous = nil
+		default:
+			s.l.Error("failed to read previous incident state, recording without resolution flip",
+				"project", incident.Incident.Key.ProjectName.String(),
+				"job", incident.Incident.Key.JobName.String(),
+				"error", err)
+			previous = nil
+		}
+
+		merged := scheduler.MergeResolvedReasons(incident.Incident, previous)
+		if err := s.incidentRepo.UpsertIncident(ctx, merged, incident.Impacts); err != nil {
 			s.l.Error("failed to persist SLA breach incident",
 				"project", incident.Incident.Key.ProjectName.String(),
 				"job", incident.Incident.Key.JobName.String(),
 				"error", err)
 		}
+	}
+
+	s.resolveUntouchedIncidents(ctx, reqConfig, freshKeys)
+}
+
+// resolveUntouchedIncidents flips the remaining active reasons of every tracked incident
+// that received no fresh detection this tick — the case where an incident disappears
+// entirely (its root cause recovered and no target breaches anymore), which the fresh
+// merge cannot see because there is no fresh incident to merge into. Freshly detected
+// incidents are skipped: their own merge already flips partially-disappeared reasons.
+// Fully resolved incidents drop out of the active scan, so they are written exactly once.
+func (s *JobRootCauseService) resolveUntouchedIncidents(ctx context.Context, reqConfig RootCauseRequestConfig, freshKeys map[scheduler.SLABreachIncidentKey]bool) {
+	tracked, err := s.incidentRepo.GetActiveIncidents(ctx, reqConfig.ReferenceTime.Add(-activeIncidentScanWindow))
+	if err != nil {
+		s.l.Error("failed to scan active incidents for resolution, deferring their flip to a later tick", "error", err)
+		return
+	}
+
+	for _, trackedIncident := range tracked {
+		if freshKeys[trackedIncident.Incident.Key] {
+			continue
+		}
+
+		// an empty fresh observation over the tracked incident resolves everything it
+		// still had active; the empty impact list clears the blast radius as well
+		emptyObservation := &scheduler.SLABreachIncident{
+			ID:        trackedIncident.Incident.ID,
+			Key:       trackedIncident.Incident.Key,
+			CreatedAt: trackedIncident.Incident.CreatedAt,
+			UpdatedAt: trackedIncident.Incident.UpdatedAt,
+		}
+		merged := scheduler.MergeResolvedReasons(emptyObservation, trackedIncident.Incident)
+
+		if err := s.incidentRepo.UpsertIncident(ctx, merged, nil); err != nil {
+			s.l.Error("failed to persist resolved SLA breach incident",
+				"project", merged.Key.ProjectName.String(),
+				"job", merged.Key.JobName.String(),
+				"error", err)
+			continue
+		}
+		s.l.Info("root-cause incident fully resolved, no longer observed in any lineage",
+			"project", merged.Key.ProjectName.String(),
+			"job", merged.Key.JobName.String())
 	}
 }
 

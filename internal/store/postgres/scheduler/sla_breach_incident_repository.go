@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -156,6 +157,51 @@ func (r *SLABreachIncidentRepository) GetActiveIncidents(ctx context.Context, si
 	return results, nil
 }
 
+// GetIncidentByKey returns the currently stored incident for the key, or
+// ErrSLABreachIncidentNotFound when none exists yet. The publisher reads it to flip
+// disappeared reasons to resolved.
+func (r *SLABreachIncidentRepository) GetIncidentByKey(ctx context.Context, key scheduler.SLABreachIncidentKey) (*scheduler.SLABreachIncident, error) {
+	query := `
+		SELECT id, project_name, job_name, scheduled_at, details,
+			max_induced_delay_seconds, created_at, updated_at
+		FROM sla_breach_root_cause
+		WHERE project_name = $1 AND job_name = $2 AND scheduled_at = $3`
+
+	var id uuid.UUID
+	var projectName, jobName string
+	var scheduledAt, createdAt, updatedAt time.Time
+	var rawDetails []byte
+	var maxInducedDelaySeconds int
+
+	err := r.db.QueryRow(ctx, query,
+		key.ProjectName.String(), key.JobName.String(), key.ScheduledAt,
+	).Scan(&id, &projectName, &jobName, &scheduledAt, &rawDetails, &maxInducedDelaySeconds, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, scheduler.ErrSLABreachIncidentNotFound
+		}
+		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error reading SLA breach incident by key", err)
+	}
+
+	details := scheduler.RootCauseDetails{}
+	if err := json.Unmarshal(rawDetails, &details); err != nil {
+		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error unmarshaling incident details", err)
+	}
+	storedKey, err := newIncidentKey(projectName, jobName, scheduledAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &scheduler.SLABreachIncident{
+		ID:                     id,
+		Key:                    storedKey,
+		Details:                details,
+		MaxInducedDelaySeconds: maxInducedDelaySeconds,
+		CreatedAt:              createdAt,
+		UpdatedAt:              updatedAt,
+	}, nil
+}
+
 func newIncidentKey(projectName, jobName string, scheduledAt time.Time) (scheduler.SLABreachIncidentKey, error) {
 	project, err := tenant.ProjectNameFrom(projectName)
 	if err != nil {
@@ -165,7 +211,12 @@ func newIncidentKey(projectName, jobName string, scheduledAt time.Time) (schedul
 	if err != nil {
 		return scheduler.SLABreachIncidentKey{}, errors.Wrap(scheduler.EntitySLABreachIncident, "error adapting job name", err)
 	}
-	return scheduler.SLABreachIncidentKey{ProjectName: project, JobName: job, ScheduledAt: scheduledAt}, nil
+	// normalize to UTC: pgx scans TIMESTAMPTZ into the connection's timezone, and
+	// SLABreachIncidentKey is used as a map key where time.Time equality compares the
+	// location — an unnormalized read-side key would never match the evaluator's UTC keys
+	// (worst case: the resolution pass would treat a freshly detected incident as
+	// untouched and resolve it in the same tick).
+	return scheduler.SLABreachIncidentKey{ProjectName: project, JobName: job, ScheduledAt: scheduledAt.UTC()}, nil
 }
 
 var _ scheduler.SLABreachIncidentRepository = (*SLABreachIncidentRepository)(nil)

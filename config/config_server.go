@@ -256,6 +256,29 @@ type JobExecutionSummaryConfig struct {
 	MaxLineageDepth    int                      `mapstructure:"max_lineage_depth" default:"25"`
 	LineageWindowHours int                      `mapstructure:"lineage_window_hours" default:"24"`
 	HistoricalDuration HistoricalDurationConfig `mapstructure:"historical_duration"`
+	// PotentialBreach enables the lineage summary to predict whether a target run is
+	// heading for an SLA miss: every wait-chain node gets an inferred deadline (the
+	// target's SLA minus damped estimated durations) and is flagged when its current
+	// state endangers that deadline.
+	PotentialBreach PotentialBreachPredictionConfig `mapstructure:"potential_breach"`
+}
+
+// PotentialBreachPredictionConfig tunes the potential-breach prediction computed in the
+// lineage summary.
+type PotentialBreachPredictionConfig struct {
+	Enable bool `mapstructure:"enable" default:"false"`
+	// DamperFactor relaxes each upstream's inferred deadline per lineage level, so deep
+	// upstreams are held to a softer standard than the target's own SLA.
+	DamperFactor DamperPredictionConfig `mapstructure:"damper_factor"`
+}
+
+type DamperPredictionConfig struct {
+	BaseValue float64 `mapstructure:"base_value" default:"1.0"`
+	Alpha     float64 `mapstructure:"alpha" default:"1.0"`
+	MinValue  float64 `mapstructure:"min_value" default:"0"`
+	// Method: APPLY_METHOD_EXPONENTIAL (default), APPLY_METHOD_DECREMENT or
+	// APPLY_METHOD_CONSTANT.
+	Method string `mapstructure:"method" default:"APPLY_METHOD_EXPONENTIAL"`
 }
 
 type HistoricalDurationConfig struct {

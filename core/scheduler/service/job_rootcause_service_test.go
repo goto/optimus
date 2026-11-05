@@ -32,6 +32,14 @@ func (m *mockIncidentRepository) GetActiveIncidents(ctx context.Context, since t
 	return nil, args.Error(1)
 }
 
+func (m *mockIncidentRepository) GetIncidentByKey(ctx context.Context, key scheduler.SLABreachIncidentKey) (*scheduler.SLABreachIncident, error) {
+	args := m.Called(ctx, key)
+	if incident, ok := args.Get(0).(*scheduler.SLABreachIncident); ok {
+		return incident, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 // mockRootCauseDetailsGetter is a local JobDetailsGetter mock; the shared mockery mock
 // lives in the internal service test package and is not visible from service_test.
 type mockRootCauseDetailsGetter struct {
@@ -261,6 +269,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once().
 			Run(func(args mock.Arguments) {
 				incident := args.Get(1).(*scheduler.SLABreachIncident)
@@ -370,6 +379,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 
 		notifier := &mockRootCauseNotifier{}
@@ -416,6 +426,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		})
 
 		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 
 		notifier := &mockRootCauseNotifier{}
@@ -465,6 +476,80 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		assert.Empty(t, incidents)
 		repo.AssertNotCalled(t, "UpsertIncident")
 		notifier.AssertNotCalled(t, "SendRootCauseBreach")
+	})
+
+	t.Run("marks reasons that disappeared as resolved when merging with the stored incident", func(t *testing.T) {
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
+
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": lineage}, nil).Once()
+
+		estimator := newEstimator(t, map[string]time.Duration{
+			"job_target":   targetBaseline,
+			"job_upstream": 64 * time.Minute,
+		})
+
+		// the stored incident still has FAILED_UPSTREAM active from an earlier tick;
+		// the fresh tick only re-observes RUNTIME_DELAY
+		previous := &scheduler.SLABreachIncident{
+			Key: scheduler.SLABreachIncidentKey{
+				ProjectName: projectName,
+				JobName:     "job_upstream",
+				ScheduledAt: base,
+			},
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{
+				{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 3300},
+				{Reason: scheduler.TierFailedUpstream, Status: scheduler.ReasonStatusActive},
+			}},
+			MaxInducedDelaySeconds: 3300,
+		}
+
+		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(previous, nil).Once()
+		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			incident := args.Get(1).(*scheduler.SLABreachIncident)
+			byReason := map[scheduler.SLABreachTier]scheduler.RootCauseReasonDetail{}
+			for _, reason := range incident.Details.Reasons {
+				byReason[reason.Reason] = reason
+			}
+			assert.Len(t, byReason, 2)
+			assert.Equal(t, scheduler.ReasonStatusActive, byReason[scheduler.TierRuntimeDelay].Status)
+			assert.Equal(t, scheduler.ReasonStatusResolved, byReason[scheduler.TierFailedUpstream].Status)
+			assert.Equal(t, 3300, incident.MaxInducedDelaySeconds, "the high-water mark survives resolution")
+		})
+
+		// alerts route by ACTIVE reasons only: FAILED_UPSTREAM, now resolved, is silent
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(func(args mock.Arguments) {
+			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+			assert.Equal(t, scheduler.TierRuntimeDelay, alert.Reason.Reason)
+		})
+
+		teamGetter := &mockProjectTeamGetter{}
+		projectWithTeam, err := tenant.NewProject("p_root", map[string]string{
+			tenant.ProjectStoragePathKey:   "gs://bucket",
+			tenant.ProjectSchedulerHost:    "airflow.example.com",
+			tenant.ProjectAlertManagerTeam: "proj-team",
+		}, nil)
+		assert.NoError(t, err)
+		teamGetter.On("Get", ctx, projectName).Return(projectWithTeam, nil).Once()
+
+		svc := newService(detailsGetter, lineageFetcher, estimator, repo, notifier, teamGetter, nil)
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_target"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, incidents, 1)
+		repo.AssertExpectations(t)
+		notifier.AssertExpectations(t)
 	})
 }
 
@@ -516,6 +601,7 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 
 		detailsGetter, lineageFetcher, estimator := deps(t, lineage, durations)
 		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, nil).Once()
 		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once()
 		if notifier == nil {
 			notifier = &mockRootCauseNotifier{}

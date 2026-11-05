@@ -193,11 +193,56 @@ type SLABreachIncidentWithImpacts struct {
 	Impacts  []ImpactedJob
 }
 
+// MergeResolvedReasons merges the freshly observed incident with the previously stored
+// one so reasons that disappeared from the lineage are marked resolved instead of lost:
+//
+//   - every reason present in the fresh observation keeps its fresh form (always active —
+//     a fresh observation of the tier means it is blocking right now), including one that
+//     was previously resolved and has come back;
+//   - every reason that exists only in the previous payload is kept, with its status
+//     flipped to resolved and its last induced delay and evidence preserved;
+//   - MaxInducedDelaySeconds is recomputed over the merged set, so the high-water mark
+//     survives resolution.
+//
+// The input incidents are not modified; nil previous returns an unchanged copy of fresh.
+func MergeResolvedReasons(fresh, previous *SLABreachIncident) *SLABreachIncident {
+	merged := &SLABreachIncident{
+		ID:        fresh.ID,
+		Key:       fresh.Key,
+		Details:   RootCauseDetails{Reasons: append([]RootCauseReasonDetail(nil), fresh.Details.Reasons...)},
+		CreatedAt: fresh.CreatedAt,
+		UpdatedAt: fresh.UpdatedAt,
+	}
+	if previous == nil {
+		merged.MaxInducedDelaySeconds = maxInducedDelaySeconds(merged.Details)
+		return merged
+	}
+
+	freshReasons := map[SLABreachTier]bool{}
+	for _, reason := range merged.Details.Reasons {
+		freshReasons[reason.Reason] = true
+	}
+	for _, previousReason := range previous.Details.Reasons {
+		if freshReasons[previousReason.Reason] {
+			continue
+		}
+		resolved := previousReason
+		resolved.Status = ReasonStatusResolved
+		merged.Details.Reasons = append(merged.Details.Reasons, resolved)
+	}
+
+	merged.MaxInducedDelaySeconds = maxInducedDelaySeconds(merged.Details)
+	return merged
+}
+
 // SLABreachIncidentRepository persists incidents and their blast radius.
 // The publisher upserts; the refactored subscriber reads.
 type SLABreachIncidentRepository interface {
 	UpsertIncident(ctx context.Context, incident *SLABreachIncident, impactedJobs []ImpactedJob) error
 	GetActiveIncidents(ctx context.Context, since time.Time) ([]*SLABreachIncidentWithImpacts, error)
+	// GetIncidentByKey returns the currently stored incident for the key, or nil when
+	// none exists yet. The publisher reads it to flip disappeared reasons to resolved.
+	GetIncidentByKey(ctx context.Context, key SLABreachIncidentKey) (*SLABreachIncident, error)
 }
 
 // RootCauseBreachAlert is one alert for a single active reason of an incident, routed to

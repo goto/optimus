@@ -223,9 +223,22 @@ func collectHookNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineag
 
 // persistIncidents writes each fully assembled incident. A failure on one incident is logged
 // and skipped so the rest still persists; the tick's findings remain the source of truth.
+// Before writing, the previously stored incident is merged in: reasons that disappeared
+// from the lineage are flipped to resolved instead of silently vanishing, so the
+// subscriber's active-reason filter stops final warnings as soon as a root cause resolves.
 func (s *JobRootCauseService) persistIncidents(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts) {
 	for _, incident := range incidents {
-		if err := s.incidentRepo.UpsertIncident(ctx, incident.Incident, incident.Impacts); err != nil {
+		previous, err := s.incidentRepo.GetIncidentByKey(ctx, incident.Incident.Key)
+		if err != nil {
+			s.l.Error("failed to read previous incident state, recording without resolution flip",
+				"project", incident.Incident.Key.ProjectName.String(),
+				"job", incident.Incident.Key.JobName.String(),
+				"error", err)
+			previous = nil
+		}
+
+		merged := scheduler.MergeResolvedReasons(incident.Incident, previous)
+		if err := s.incidentRepo.UpsertIncident(ctx, merged, incident.Impacts); err != nil {
 			s.l.Error("failed to persist SLA breach incident",
 				"project", incident.Incident.Key.ProjectName.String(),
 				"job", incident.Incident.Key.JobName.String(),

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -154,6 +155,50 @@ func (r *SLABreachIncidentRepository) GetActiveIncidents(ctx context.Context, si
 		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error reading SLA breach incident rows", err)
 	}
 	return results, nil
+}
+
+// GetIncidentByKey returns the currently stored incident for the key, or nil when none
+// exists yet — the publisher reads it to flip disappeared reasons to resolved.
+func (r *SLABreachIncidentRepository) GetIncidentByKey(ctx context.Context, key scheduler.SLABreachIncidentKey) (*scheduler.SLABreachIncident, error) {
+	query := `
+		SELECT id, project_name, job_name, scheduled_at, details,
+			max_induced_delay_seconds, created_at, updated_at
+		FROM sla_breach_root_cause
+		WHERE project_name = $1 AND job_name = $2 AND scheduled_at = $3`
+
+	var id uuid.UUID
+	var projectName, jobName string
+	var scheduledAt, createdAt, updatedAt time.Time
+	var rawDetails []byte
+	var maxInducedDelaySeconds int
+
+	err := r.db.QueryRow(ctx, query,
+		key.ProjectName.String(), key.JobName.String(), key.ScheduledAt,
+	).Scan(&id, &projectName, &jobName, &scheduledAt, &rawDetails, &maxInducedDelaySeconds, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error reading SLA breach incident by key", err)
+	}
+
+	details := scheduler.RootCauseDetails{}
+	if err := json.Unmarshal(rawDetails, &details); err != nil {
+		return nil, errors.Wrap(scheduler.EntitySLABreachIncident, "error unmarshaling incident details", err)
+	}
+	storedKey, err := newIncidentKey(projectName, jobName, scheduledAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &scheduler.SLABreachIncident{
+		ID:                     id,
+		Key:                    storedKey,
+		Details:                details,
+		MaxInducedDelaySeconds: maxInducedDelaySeconds,
+		CreatedAt:              createdAt,
+		UpdatedAt:              updatedAt,
+	}, nil
 }
 
 func newIncidentKey(projectName, jobName string, scheduledAt time.Time) (scheduler.SLABreachIncidentKey, error) {

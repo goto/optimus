@@ -754,8 +754,8 @@ func NewJobRunHandler(
 	jobSLAPredictorService JobSLAPredictorService,
 	thirdPartySensorService ThirdPartySensorService,
 	jobExpectatorService JobExpectatorService,
-	enableDexUseYesterdayCompletenessOnly bool,
 	jobRootCauseService JobRootCauseService,
+	enableDexUseYesterdayCompletenessOnly bool,
 ) *JobRunHandler {
 	return &JobRunHandler{
 		l:                                     l,
@@ -766,7 +766,7 @@ func NewJobRunHandler(
 		jobSLAPredictorService:                jobSLAPredictorService,
 		thirdPartySensorService:               thirdPartySensorService,
 		jobExpectatorService:                  jobExpectatorService,
+		jobRootCauseService:                   jobRootCauseService,
 		enableDexUseYesterdayCompletenessOnly: enableDexUseYesterdayCompletenessOnly,
-		jobRootCauseService:     jobRootCauseService,
 	}
 }

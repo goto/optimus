@@ -144,11 +144,19 @@ type RootCauseAlertConfig struct {
 	ThirdPartyDelayStartHourUTC     int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
 	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"600"`
 
-	DedupWindowMinutes int      `mapstructure:"dedup_window_minutes" default:"60"`
-	InfraTeam          string   `mapstructure:"infra_team"`
-	ThirdPartyTeam     string   `mapstructure:"third_party_team"`
-	AlertSeverity      string   `mapstructure:"alert_severity" default:"WARNING"`
-	ExcludeProjects    []string `mapstructure:"exclude_projects"`
+	DedupWindowMinutes int                    `mapstructure:"dedup_window_minutes" default:"60"`
+	InfraTeam          string                 `mapstructure:"infra_team"`
+	ThirdPartyTeam     string                 `mapstructure:"third_party_team"`
+	AlertSeverity      string                 `mapstructure:"alert_severity" default:"WARNING"`
+	AlertSuppression   AlertSuppressionConfig `mapstructure:"alert_suppression"`
+	ExcludeProjects    []string               `mapstructure:"exclude_projects"`
+}
+
+// AlertSuppressionConfig tunes which root-cause alerts are sent, while every incident
+// still gets recorded as usual.
+type AlertSuppressionConfig struct {
+	SkipReasons                 []string `mapstructure:"skip_reasons"`
+	MinTotalInducedDelayMinutes int      `mapstructure:"min_total_induced_delay_minutes" default:"0"`
 }
 
 // HistoricalStartConfig the percentile offset between a run's scheduled_at and when its task actually started, over the last N runs.

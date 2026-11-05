@@ -330,6 +330,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		SchedulerDelayMinutesPerDepth:   2.5,
 		ThirdPartyDelayThresholdSeconds: 600,
 		DedupWindowMinutes:              60,
+		AlertSeverity:                   "WARNING",
 		// platform teams default to empty: routing is disabled until configured
 	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{

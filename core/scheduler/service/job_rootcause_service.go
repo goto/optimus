@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,6 +41,10 @@ type JobRootCauseService struct {
 	rootCauseNotifier RootCauseBreachNotifier
 	projectTeamGetter ProjectTeamGetter
 	teamCache         map[tenant.ProjectName]string
+	// lineageBatchSize caps how many targets get their upstream lineage built at once
+	// (root_cause_alert.lineage_batch_size, defaultLineageBatchSize when unset); keeps
+	// peak memory proportional to the batch
+	lineageBatchSize int
 }
 
 // RootCauseBreachNotifier relays one root-cause breach alert; implemented by the
@@ -53,11 +58,21 @@ type ProjectTeamGetter interface {
 	Get(ctx context.Context, projectName tenant.ProjectName) (*tenant.Project, error)
 }
 
+// defaultLineageBatchSize caps how many targets get their upstream lineage built at once.
+// A single identify request over a large label match used to hold every target's full
+// graph in memory simultaneously and could exhaust the server; each batch is fetched,
+// evaluated and released before the next one is built.
+const defaultLineageBatchSize = 50
+
 func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jobDetailsGetter JobDetailsGetter,
 	jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator,
 	incidentRepo scheduler.SLABreachIncidentRepository, thirdPartyTypes []string,
 	rootCauseNotifier RootCauseBreachNotifier, projectTeamGetter ProjectTeamGetter,
 ) *JobRootCauseService {
+	batchSize := config.LineageBatchSize
+	if batchSize <= 0 {
+		batchSize = defaultLineageBatchSize
+	}
 	return &JobRootCauseService{
 		l:                 l,
 		config:            config,
@@ -68,6 +83,7 @@ func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jo
 		rootCauseNotifier: rootCauseNotifier,
 		projectTeamGetter: projectTeamGetter,
 		teamCache:         map[tenant.ProjectName]string{},
+		lineageBatchSize:  batchSize,
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
 			RuntimeDelayThreshold:       time.Duration(config.RuntimeDelayThresholdMinutes) * time.Minute,
 			SchedulerDelayPerDepth:      time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
@@ -137,6 +153,34 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 		return nil, nil
 	}
 
+	targetNames := make([]scheduler.JobName, 0, len(jobSchedules))
+	for name := range jobSchedules {
+		targetNames = append(targetNames, name)
+	}
+	sort.Slice(targetNames, func(i, j int) bool { return targetNames[i] < targetNames[j] })
+
+	var detections []scheduler.RootCauseDetection
+	for batchStart := 0; batchStart < len(targetNames); batchStart += s.lineageBatchSize {
+		batchEnd := min(batchStart+s.lineageBatchSize, len(targetNames))
+		batch := make(map[scheduler.JobName]*scheduler.JobSchedule, batchEnd-batchStart)
+		for _, name := range targetNames[batchStart:batchEnd] {
+			batch[name] = jobSchedules[name]
+		}
+		batchDetections, err := s.evaluateBatch(ctx, batch, reqConfig)
+		if err != nil {
+			// one oversized or broken batch should not stop the remaining batches
+			s.l.Error("failed to evaluate lineage batch for root causes, skipping",
+				"project", projectName.String(), "targets", batchEnd-batchStart, "error", err)
+			continue
+		}
+		detections = append(detections, batchDetections...)
+	}
+	return detections, nil
+}
+
+// evaluateBatch builds the upstream lineage for one batch of targets and runs the
+// publisher on each target of that batch.
+func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, reqConfig RootCauseRequestConfig) ([]scheduler.RootCauseDetection, error) {
 	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules, int(reqConfig.ScheduleRangeInHours.Hours()))
 	if err != nil {
 		return nil, err

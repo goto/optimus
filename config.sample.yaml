@@ -169,6 +169,11 @@ alerting:
       # THIRD_PARTY_DELAY); FAILED_UPSTREAM, WAITING_UPSTREAM and AGGRESSIVE_SLA carry
       # no measured delay and are never affected — use skip_reasons for those.
       min_total_induced_delay_minutes: 0
+    # LineageBatchSize caps how many targets get their upstream lineage built at once
+    # during root-cause identification. Peak memory grows with the batch, not the whole
+    # project; lower it (e.g. 25) if identify requests exhaust the server's memory.
+    # 0 keeps the built-in default of 50.
+    lineage_batch_size: 50
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

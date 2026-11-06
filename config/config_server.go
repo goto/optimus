@@ -150,6 +150,10 @@ type RootCauseAlertConfig struct {
 	AlertSeverity      string                 `mapstructure:"alert_severity" default:"WARNING"`
 	AlertSuppression   AlertSuppressionConfig `mapstructure:"alert_suppression"`
 	ExcludeProjects    []string               `mapstructure:"exclude_projects"`
+	// LineageBatchSize caps how many targets get their upstream lineage built at once
+	// during root-cause identification; lower it if identify requests exhaust memory.
+	// 0 keeps the built-in default.
+	LineageBatchSize int `mapstructure:"lineage_batch_size" default:"50"`
 }
 
 // AlertSuppressionConfig tunes which root-cause alerts are sent, while every incident

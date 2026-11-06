@@ -560,6 +560,95 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		repo.AssertExpectations(t)
 		notifier.AssertExpectations(t)
 	})
+
+	t.Run("evaluates targets in bounded lineage batches", func(t *testing.T) {
+		// three targets with a batch size of one: each target's lineage is fetched,
+		// evaluated and released before the next one is built
+		targetNames := []string{"job_a", "job_b", "job_c"}
+		// 6-hour cadence; reference 13:30 resolves the 12:00 run as the in-range target,
+		// with each upstream finishing a minute before the target starts
+		targetAt := base.Add(2 * time.Hour)
+
+		var jobs []*scheduler.JobWithDetails
+		lineages := map[string]*scheduler.JobLineageSummary{}
+		durations := map[string]time.Duration{}
+		for _, name := range targetNames {
+			jobs = append(jobs, newJobWithDetails(name))
+			upstreamRun := rcMakeRun(scheduler.JobName("job_upstream_"+name), base,
+				1*time.Hour, rcPtr(base), rcPtr(base.Add(119*time.Minute)), "success")
+			targetRun := rcMakeRun(scheduler.JobName(name), targetAt,
+				1*time.Hour, rcPtr(targetAt), nil, "running")
+			lineages[name] = rcMakeLineage(scheduler.JobName(name), tnnt, targetRun,
+				rcMakeLineage(scheduler.JobName("job_upstream_"+name), tnnt, upstreamRun))
+			durations[name] = targetBaseline
+			durations["job_upstream_"+name] = 64 * time.Minute
+		}
+
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_a", "job_b", "job_c"}).
+			Return(jobs, nil).Once()
+
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		for _, name := range targetNames {
+			name := name
+			lineageFetcher.On("GetJobLineage", ctx,
+				mock.MatchedBy(func(schedules map[scheduler.JobName]*scheduler.JobSchedule) bool {
+					return len(schedules) == 1 && schedules[scheduler.JobName(name)] != nil
+				}), 2).
+				Return(map[scheduler.JobName]*scheduler.JobLineageSummary{scheduler.JobName(name): lineages[name]}, nil).Once()
+		}
+
+		estimator := &mockRootCauseDurationEstimator{}
+		durationsByJob := map[scheduler.JobName]*time.Duration{}
+		for jobName, duration := range durations {
+			duration := duration
+			durationsByJob[scheduler.JobName(jobName)] = &duration
+		}
+		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
+			Return(durationsByJob, nil).Times(3)
+
+		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Times(3)
+		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
+		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Times(3)
+
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Times(3).Run(func(args mock.Arguments) {
+			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+			assert.Contains(t, []string{"job_upstream_job_a", "job_upstream_job_b", "job_upstream_job_c"}, alert.RootCauseJob)
+		})
+
+		teamGetter := &mockProjectTeamGetter{}
+		projectWithTeam, err := tenant.NewProject("p_root", map[string]string{
+			tenant.ProjectStoragePathKey:   "gs://bucket",
+			tenant.ProjectSchedulerHost:    "airflow.example.com",
+			tenant.ProjectAlertManagerTeam: "proj-team",
+		}, nil)
+		assert.NoError(t, err)
+		// the team cache resolves the project once regardless of the batch count
+		teamGetter.On("Get", ctx, projectName).Return(projectWithTeam, nil).Maybe()
+
+		svc := newService(detailsGetter, lineageFetcher, estimator, repo, notifier, teamGetter, &config.RootCauseAlertConfig{
+			RuntimeDelayThresholdMinutes:    30,
+			SchedulerDelayMinutesPerDepth:   2.5,
+			ThirdPartyDelayThresholdSeconds: 600,
+			LineageBatchSize:                1,
+		})
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_a", "job_b", "job_c"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, incidents, 3)
+		lineageFetcher.AssertNumberOfCalls(t, "GetJobLineage", 3)
+		repo.AssertExpectations(t)
+		notifier.AssertExpectations(t)
+	})
 }
 
 func TestJobRootCauseService_AlertSuppression(t *testing.T) {

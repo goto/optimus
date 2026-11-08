@@ -896,6 +896,112 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 	})
 }
 
+// TestJobRootCauseService_AggressiveSLAAlertFlag: an unexplained actual breach is recorded
+// as AGGRESSIVE_SLA, and only alerts when the flag turns it on.
+func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
+	ctx := context.Background()
+	projectName := tenant.ProjectName("p_root")
+	tnnt := rcTestTenant("p_root")
+
+	base := time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC)
+	referenceTime := base.Add(3*time.Hour + 30*time.Minute) // 30m past the target's 13:00 SLA
+	targetScheduledAt := base.Add(2 * time.Hour)
+
+	jobWithDetails := &scheduler.JobWithDetails{
+		Name: "job_target",
+		Job: &scheduler.Job{
+			Tenant: tnnt,
+			Name:   "job_target",
+		},
+		Schedule: &scheduler.Schedule{
+			StartDate: base.Add(-48 * time.Hour),
+			Interval:  "0 6,12,18 * * *",
+		},
+		Alerts: []scheduler.Alert{{On: scheduler.EventCategorySLAMiss, Config: map[string]string{"duration": "1h"}}},
+	}
+	// started on time and running within its baseline: nothing explains the breach
+	targetRun := rcMakeRun("job_target", targetScheduledAt,
+		1*time.Hour, rcPtr(targetScheduledAt), nil, "running")
+	lineage := rcMakeLineage("job_target", tnnt, targetRun)
+
+	runScenario := func(alertEnabled bool) ([]*scheduler.SLABreachIncidentWithImpacts, *mockRootCauseNotifier) {
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": lineage}, nil).Once()
+
+		estimator := &mockRootCauseDurationEstimator{}
+		durPtr := func(d time.Duration) *time.Duration { return &d }
+		durations := map[scheduler.JobName]*time.Duration{"job_target": durPtr(150 * time.Minute)}
+		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).Return(durations, nil).Once()
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).Return(durations, nil).Once()
+
+		repo := &mockIncidentRepository{}
+		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
+		repo.On("GetActiveIncidents", ctx, mock.Anything).Return(nil, nil).Maybe()
+		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once().
+			Run(func(args mock.Arguments) {
+				incident := args.Get(1).(*scheduler.SLABreachIncident)
+				assert.Equal(t, "job_target", incident.Key.JobName.String())
+				assert.Equal(t, scheduler.TierAggressiveSLA, incident.Details.Reasons[0].Reason)
+			})
+
+		notifier := &mockRootCauseNotifier{}
+		if alertEnabled {
+			notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(func(args mock.Arguments) {
+				alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+				assert.Equal(t, scheduler.TierAggressiveSLA, alert.Reason.Reason)
+			})
+		}
+		teamGetter := &mockProjectTeamGetter{}
+		projectWithTeam, err := tenant.NewProject("p_root", map[string]string{
+			tenant.ProjectStoragePathKey:   "gs://bucket",
+			tenant.ProjectSchedulerHost:    "airflow.example.com",
+			tenant.ProjectAlertManagerTeam: "proj-team",
+		}, nil)
+		assert.NoError(t, err)
+		teamGetter.On("Get", ctx, projectName).Return(projectWithTeam, nil).Maybe()
+
+		svc := service.NewJobRootCauseService(
+			log.NewNoop(),
+			config.RootCauseAlertConfig{
+				RuntimeDelayThresholdMinutes:    30,
+				SchedulerDelayMinutesPerDepth:   2.5,
+				ThirdPartyDelayThresholdSeconds: 600,
+				AggressiveSLAAlertEnabled:       alertEnabled,
+			},
+			rcPotentialConfig(),
+			detailsGetter, lineageFetcher,
+			estimator, estimator, nil, rcScheduleChangeGetter(),
+			repo, []string{"dex"}, notifier, teamGetter,
+		)
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_target"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+		return incidents, notifier
+	}
+
+	t.Run("off by default: recorded without alerting", func(t *testing.T) {
+		incidents, notifier := runScenario(false)
+		assert.Len(t, incidents, 1)
+		notifier.AssertNotCalled(t, "SendRootCauseBreach")
+	})
+
+	t.Run("enabled: alerts the impacted owner", func(t *testing.T) {
+		incidents, notifier := runScenario(true)
+		assert.Len(t, incidents, 1)
+		notifier.AssertExpectations(t)
+	})
+}
+
 func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 	ctx := context.Background()
 	projectName := tenant.ProjectName("p_root")

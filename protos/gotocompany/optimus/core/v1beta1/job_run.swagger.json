@@ -753,6 +753,39 @@
           "JobRunService"
         ]
       }
+    },
+    "/v1beta1/sla_breach_root_cause/identify": {
+      "post": {
+        "summary": "IdentifySLABreachRootCause evaluates the lineage of the given projects' jobs, identifies\nwhy each SLA breach is (or is about to be) happening using tiered root-cause detection,\nand groups the findings by the offending root-cause entity (project).",
+        "operationId": "JobRunService_IdentifySLABreachRootCause",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1beta1IdentifySLABreachRootCauseResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1beta1IdentifySLABreachRootCauseRequest"
+            }
+          }
+        ],
+        "tags": [
+          "JobRunService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -784,7 +817,7 @@
         "NULL_VALUE"
       ],
       "default": "NULL_VALUE",
-      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -1066,6 +1099,72 @@
             "$ref": "#/definitions/v1beta1UpstreamJobsStatus"
           },
           "description": "key is \"\u003cproject_name\u003e/\u003cjob_name\u003e\" (project-qualified) so targets from\ndifferent projects don't collide in batch mode."
+        }
+      }
+    },
+    "v1beta1IdentifySLABreachRootCauseRequest": {
+      "type": "object",
+      "properties": {
+        "projectNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Projects whose jobs are evaluated as potential SLA breach targets."
+        },
+        "jobNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Optional; restricts evaluation to these jobs"
+        },
+        "jobLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1beta1LabelValues"
+          },
+          "description": "Optional; multi-value label filter. Values within a key are OR'd, keys are AND'd."
+        },
+        "referenceTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Point in time to evaluate from; the server uses \"now\" when unset."
+        },
+        "enableAlert": {
+          "type": "boolean",
+          "description": "When false, the engine runs in observe mode: findings are returned but nothing is\npersisted to the incident tables and no alerts are sent."
+        },
+        "scheduledRangeInHours": {
+          "type": "integer",
+          "format": "int32",
+          "description": "How far from reference_time to look for the targets' next/previous runs."
+        }
+      }
+    },
+    "v1beta1IdentifySLABreachRootCauseResponse": {
+      "type": "object",
+      "properties": {
+        "rootCauses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1RootCause"
+          }
+        }
+      }
+    },
+    "v1beta1ImpactedJob": {
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -1563,6 +1662,36 @@
     "v1beta1RegisterJobEventResponse": {
       "type": "object"
     },
+    "v1beta1RootCause": {
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "jobName": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1RootCauseReasonDetail"
+          }
+        },
+        "maxInducedDelay": {
+          "type": "string"
+        },
+        "impactedJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1beta1ImpactedJob"
+          }
+        }
+      }
+    },
     "v1beta1RootCauseEvidence": {
       "type": "object",
       "properties": {
@@ -1595,6 +1724,54 @@
           "description": "How far this cause overran its baseline. Set when identification scored\ninduced delay (RUNNING_LONG, STARTED_LATE, THIRD_PARTY_DELAY)."
         }
       }
+    },
+    "v1beta1RootCauseReason": {
+      "type": "string",
+      "enum": [
+        "ROOT_CAUSE_REASON_UNSPECIFIED",
+        "ROOT_CAUSE_REASON_RUNTIME_DELAY",
+        "ROOT_CAUSE_REASON_SCHEDULER_DELAY",
+        "ROOT_CAUSE_REASON_THIRD_PARTY_DELAY",
+        "ROOT_CAUSE_REASON_FAILED_UPSTREAM",
+        "ROOT_CAUSE_REASON_WAITING_UPSTREAM",
+        "ROOT_CAUSE_REASON_AGGRESSIVE_SLA"
+      ],
+      "default": "ROOT_CAUSE_REASON_UNSPECIFIED",
+      "description": " - ROOT_CAUSE_REASON_WAITING_UPSTREAM: The run is stuck waiting although every resolved upstream is successful or missing\nentirely (e.g. uncreated runs, depends_on_past self-waits).\n - ROOT_CAUSE_REASON_AGGRESSIVE_SLA: The downstream job breached its SLA with no upstream cause detected; the SLA is\nconfigured too aggressively."
+    },
+    "v1beta1RootCauseReasonDetail": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/v1beta1RootCauseReason"
+        },
+        "status": {
+          "$ref": "#/definitions/v1beta1RootCauseStatus"
+        },
+        "inducedDelay": {
+          "type": "string"
+        },
+        "blockedOnSensors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sensor task names the run is blocked on; set for THIRD_PARTY_DELAY."
+        },
+        "sourceType": {
+          "type": "string",
+          "description": "The third-party type behind a THIRD_PARTY_DELAY, e.g. \"dex\"."
+        }
+      }
+    },
+    "v1beta1RootCauseStatus": {
+      "type": "string",
+      "enum": [
+        "ROOT_CAUSE_STATUS_UNSPECIFIED",
+        "ROOT_CAUSE_STATUS_ACTIVE",
+        "ROOT_CAUSE_STATUS_RESOLVED"
+      ],
+      "default": "ROOT_CAUSE_STATUS_UNSPECIFIED"
     },
     "v1beta1SLAConfig": {
       "type": "object",

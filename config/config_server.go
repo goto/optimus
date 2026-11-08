@@ -93,14 +93,16 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager             EventManagerConfig                  `mapstructure:"alert_manager"`
-	Dashboard                string                              `mapstructure:"dashboard"`
-	DataConsole              string                              `mapstructure:"data_console"`
-	EnableSlack              bool                                `mapstructure:"enable_slack"`
-	EnablePagerDuty          bool                                `mapstructure:"enable_pager_duty"`
+	EventManager    EventManagerConfig `mapstructure:"alert_manager"`
+	Dashboard       string             `mapstructure:"dashboard"`
+	DataConsole     string             `mapstructure:"data_console"`
+	EnableSlack     bool               `mapstructure:"enable_slack"`
+	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
+	// TODO: deprecate RootCauseConfig when RootCauseAlertConfig fully reliable
 	RootCause                RootCauseConfig                     `mapstructure:"root_cause"`
 	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
 	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
+	RootCauseAlert           RootCauseAlertConfig                `mapstructure:"root_cause_alert"`
 	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
 }
 
@@ -122,11 +124,43 @@ type RootCauseConfig struct {
 type PotentialSLABreachConfig struct {
 	DamperCoeff             float64 `mapstructure:"damper_coeff" default:"1.0"`
 	EnablePersistentLogging bool    `mapstructure:"enable_persistent_logging" default:"false"`
+	// SubscriberMode stops this job from computing lineage: it reads the incidents the
+	// root-cause publisher persists and alerts the impacted teams as a final warning.
+	SubscriberMode bool `mapstructure:"subscriber_mode" default:"false"`
 	// DedupImpactedJobs alerts each impacted (target) job run at most once. It reads what
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
 	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 	HistoricalStartConfig   HistoricalStartConfig   `mapstructure:"historical_start_config"`
+}
+
+// RootCauseAlertConfig tunes the root-cause SLA breach publisher: the reason thresholds and
+// where the platform-level reasons (scheduler, third-party) route their alerts.
+type RootCauseAlertConfig struct {
+	RuntimeDelayThresholdMinutes  int     `mapstructure:"runtime_delay_threshold_minutes" default:"30"`
+	SchedulerDelayMinutesPerDepth float64 `mapstructure:"scheduler_delay_minutes_per_depth" default:"2.5"`
+	// ThirdPartyDelayStartHourUTC is the UTC hour (0-23) from which sensor wait
+	// counts as induced delay. Wait before that hour is ignored.
+	ThirdPartyDelayStartHourUTC     int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"600"`
+
+	DedupWindowMinutes int                    `mapstructure:"dedup_window_minutes" default:"60"`
+	InfraTeam          string                 `mapstructure:"infra_team"`
+	ThirdPartyTeam     string                 `mapstructure:"third_party_team"`
+	AlertSeverity      string                 `mapstructure:"alert_severity" default:"WARNING"`
+	AlertSuppression   AlertSuppressionConfig `mapstructure:"alert_suppression"`
+	ExcludeProjects    []string               `mapstructure:"exclude_projects"`
+	// LineageBatchSize caps how many targets get their upstream lineage built at once
+	// during root-cause identification; lower it if identify requests exhaust memory.
+	// 0 keeps the built-in default.
+	LineageBatchSize int `mapstructure:"lineage_batch_size" default:"50"`
+}
+
+// AlertSuppressionConfig tunes which root-cause alerts are sent, while every incident
+// still gets recorded as usual.
+type AlertSuppressionConfig struct {
+	SkipReasons                 []string `mapstructure:"skip_reasons"`
+	MinTotalInducedDelayMinutes int      `mapstructure:"min_total_induced_delay_minutes" default:"0"`
 }
 
 // HistoricalStartConfig the percentile offset between a run's scheduled_at and when its task actually started, over the last N runs.

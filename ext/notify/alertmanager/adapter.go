@@ -28,6 +28,7 @@ const (
 	AlertTypeJobSuccess         = "job_success"
 	AlertTypeOperatorSLAMiss    = "operator_sla_miss"
 	AlertTypePotentialSLABreach = "potential_sla_breach"
+	AlertTypeRootCauseBreach    = "rootcause_breach"
 
 	OptimusReplayTemplate              = "optimus-job-replay"
 	OptimusChangeTemplate              = "optimus-change"
@@ -37,6 +38,7 @@ const (
 	OptimusSuccessNotificationTemplate = "optimus-job-success"
 	OptimusOperatorSLAMissTemplate     = "optimus-operator-sla-miss"
 	OptimusPotentialSLABreachTemplate  = "optimus-potential-sla-breach"
+	OptimusRootCauseBreachTemplate     = "optimus-root-cause-breach"
 
 	InfoSeverity     = "INFO"
 	WarningSeverity  = "WARNING"
@@ -304,6 +306,67 @@ func (a *AlertManager) SendPotentialSLABreach(alert *scheduler.PotentialSLABreac
 	a.relay(a.buildPotentialSLABreachPayload(alert))
 }
 
+// SendRootCauseBreach relays one alert for a single active reason of a root-cause SLA
+// breach incident. Dedup keys (root_cause_job unless scheduler-attributed, reason, team)
+// must stay top-level strings so the alert_logs deduplication can match them.
+func (a *AlertManager) SendRootCauseBreach(alert *scheduler.RootCauseBreachAlert) {
+	a.relay(a.buildRootCauseBreachPayload(alert))
+}
+
+func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBreachAlert) *AlertPayload {
+	data := map[string]interface{}{
+		"team":                  alert.Team,
+		"project":               alert.Project,
+		"root_cause_project":    alert.RootCauseProject,
+		"reason":                string(alert.Reason.Reason),
+		"impacted_jobs":         alert.ImpactedJobs,
+		"impacted_jobs_count":   len(alert.ImpactedJobs),
+		"impacted_jobs_preview": formatJobsPreview(alert.ImpactedJobs, impactedJobsPreviewLimit),
+	}
+	// a scheduler-attributed alert omits the root cause identity on purpose: the routing
+	// team is the platform team and the alert deduplicates globally per reason
+	if alert.RootCauseJob != "" {
+		data["root_cause_job"] = alert.RootCauseJob
+	}
+	if alert.RootCauseScheduledAt != nil {
+		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
+	}
+	if alert.Reason.InducedDelaySeconds > 0 {
+		data["induced_delay"] = formatDuration(time.Duration(alert.Reason.InducedDelaySeconds) * time.Second)
+	}
+	if len(alert.Reason.BlockedOnSensors) > 0 {
+		data["blocked_on_sensors"] = alert.Reason.BlockedOnSensors
+	}
+	if alert.Reason.SourceType != "" {
+		data["source_type"] = alert.Reason.SourceType
+	}
+	// present only when the offending run has finished: the template renders the
+	// "root cause has finished, impact is final" line from this key
+	if alert.Reason.IsJobFinished {
+		data["root_cause_finished"] = true
+	}
+
+	severity := getSeverity(alert.Severity)
+
+	alertPayload := &AlertPayload{
+		Project:  alert.Project,
+		Data:     data,
+		Template: OptimusRootCauseBreachTemplate,
+		Labels: map[string]string{
+			DefaultChannelLabel: alert.Team,
+			SeverityLabel:       severity,
+		},
+		Endpoint:  a.endpoint,
+		AlertType: AlertTypeRootCauseBreach,
+	}
+
+	if severity == CriticalSeverity {
+		alertPayload.Labels[EnvironmentLabel] = "production"
+	}
+
+	return alertPayload
+}
+
 // buildPotentialSLABreachPayload flattens one root cause into a payload. Dedup keys
 // (root_cause_job, reason, team; scheduled_at when set) must stay top-level strings.
 func (a *AlertManager) buildPotentialSLABreachPayload(alert *scheduler.PotentialSLABreachAlert) *AlertPayload {
@@ -411,8 +474,9 @@ func evidenceFields(evidence scheduler.RootCauseEvidence) map[string]interface{}
 	return fields
 }
 
-// formatDuration rounds to the minute so "Delayed by" reads e.g. "1h2m" instead of the raw
-// "1h2m3.456789s" that time.Duration.String() would otherwise produce.
+// formatDuration renders at second precision so sub-minute delays are visible ("1m5s",
+// "45s") instead of collapsing to the enclosing minute; time.Duration.String() already
+// omits trailing zero components ("40m0s" for an exact 40m).
 func formatDuration(d time.Duration) string {
-	return d.Round(time.Minute).String()
+	return d.Round(time.Second).String()
 }

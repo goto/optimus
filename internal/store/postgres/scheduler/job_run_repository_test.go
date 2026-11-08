@@ -27,7 +27,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("creates a job run", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -39,7 +39,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 	})
 	t.Run("GetByID", func(t *testing.T) {
 		t.Run("gets a specific job run by ID", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -55,7 +55,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 
 	t.Run("Update", func(t *testing.T) {
 		t.Run("updates a specific job run by id", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -75,7 +75,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 	})
 	t.Run("UpdateSLA", func(t *testing.T) {
 		t.Run("updates jobs sla alert firing status", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -95,7 +95,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 	})
 	t.Run("UpdateMonitoring", func(t *testing.T) {
 		t.Run("updates job run monitoring", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -118,7 +118,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 	})
 	t.Run("GetLatestRun", func(t *testing.T) {
 		t.Run("gets the latest job run", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -132,7 +132,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 		})
 
 		t.Run("returns error if no job run found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 
 			_, err := jobRunRepo.GetLatestRun(ctx, tnnt.ProjectName(), jobAName, nil)
@@ -141,7 +141,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 		})
 
 		t.Run("gets the latest job run with specific state", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -161,7 +161,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 
 	t.Run("GetRunsByTimeRange", func(t *testing.T) {
 		t.Run("gets job runs within a specific time range", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -178,7 +178,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 		})
 
 		t.Run("returns empty list if no job runs found in the time range", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 
 			since := scheduledAt.Add(-2 * time.Hour)
@@ -189,7 +189,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 		})
 
 		t.Run("gets job runs within a specific time range and state", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -213,7 +213,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 
 	t.Run("GetRunsByInterval", func(t *testing.T) {
 		t.Run("gets job runs with overlap of specific interval", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			_ = addJobs(ctx, t, db)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 			err := jobRunRepo.Create(ctx, tnnt, jobAName, scheduledAt, intr, slaDefinitionInSec)
@@ -225,7 +225,7 @@ func TestPostgresJobRunRepository(t *testing.T) {
 			assert.Equal(t, intr.End(), *jobRuns[0].WindowEnd)
 		})
 		t.Run("returns empty list if no job runs found in the interval", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			jobRunRepo := postgres.NewJobRunRepository(db, nil)
 
 			since := scheduledAt.Add(-2 * time.Hour)

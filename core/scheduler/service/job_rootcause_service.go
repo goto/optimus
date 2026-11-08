@@ -34,9 +34,17 @@ type JobRootCauseService struct {
 	config            config.RootCauseAlertConfig
 	jobDetailsGetter  JobDetailsGetter
 	jobLineageFetcher JobLineageFetcher
-	durationEstimator DurationEstimator
-	incidentRepo      scheduler.SLABreachIncidentRepository
-	publisher         *rootcause.Publisher
+	// baselineEstimator builds the historical task/hook baseline the RUNTIME_DELAY
+	// induced-delay math compares against (root_cause_alert.baseline_duration_estimator)
+	baselineEstimator DurationEstimator
+	// slaDurationEstimator and startDelayEstimator feed the inferred-SLA calculation with
+	// the same estimator settings the potential-SLA API uses, so both agree on deadlines
+	potentialConfig        config.PotentialSLABreachConfig
+	slaDurationEstimator   DurationEstimator
+	startDelayEstimator    StartDelayEstimator
+	scheduledChangeGetter  rootcause.ScheduledChangeGetter
+	incidentRepo           scheduler.SLABreachIncidentRepository
+	publisher             *rootcause.Publisher
 	// alert routing
 	rootCauseNotifier RootCauseBreachNotifier
 	projectTeamGetter ProjectTeamGetter
@@ -64,31 +72,37 @@ type ProjectTeamGetter interface {
 // evaluated and released before the next one is built.
 const defaultLineageBatchSize = 50
 
-func NewJobRootCauseService(l log.Logger, config config.RootCauseAlertConfig, jobDetailsGetter JobDetailsGetter,
-	jobLineageFetcher JobLineageFetcher, durationEstimator DurationEstimator,
+func NewJobRootCauseService(l log.Logger, alertConfig config.RootCauseAlertConfig, potentialConfig config.PotentialSLABreachConfig,
+	jobDetailsGetter JobDetailsGetter, jobLineageFetcher JobLineageFetcher,
+	baselineEstimator, slaDurationEstimator DurationEstimator, startDelayEstimator StartDelayEstimator,
+	scheduledChangeGetter rootcause.ScheduledChangeGetter,
 	incidentRepo scheduler.SLABreachIncidentRepository, thirdPartyTypes []string,
 	rootCauseNotifier RootCauseBreachNotifier, projectTeamGetter ProjectTeamGetter,
 ) *JobRootCauseService {
-	batchSize := config.LineageBatchSize
+	batchSize := alertConfig.LineageBatchSize
 	if batchSize <= 0 {
 		batchSize = defaultLineageBatchSize
 	}
 	return &JobRootCauseService{
-		l:                 l,
-		config:            config,
-		jobDetailsGetter:  jobDetailsGetter,
-		jobLineageFetcher: jobLineageFetcher,
-		durationEstimator: durationEstimator,
-		incidentRepo:      incidentRepo,
-		rootCauseNotifier: rootCauseNotifier,
-		projectTeamGetter: projectTeamGetter,
-		teamCache:         map[tenant.ProjectName]string{},
-		lineageBatchSize:  batchSize,
+		l:                     l,
+		config:                alertConfig,
+		potentialConfig:       potentialConfig,
+		jobDetailsGetter:      jobDetailsGetter,
+		jobLineageFetcher:     jobLineageFetcher,
+		baselineEstimator:     baselineEstimator,
+		slaDurationEstimator:  slaDurationEstimator,
+		startDelayEstimator:   startDelayEstimator,
+		scheduledChangeGetter: scheduledChangeGetter,
+		incidentRepo:          incidentRepo,
+		rootCauseNotifier:     rootCauseNotifier,
+		projectTeamGetter:     projectTeamGetter,
+		teamCache:             map[tenant.ProjectName]string{},
+		lineageBatchSize:      batchSize,
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
-			RuntimeDelayThreshold:       time.Duration(config.RuntimeDelayThresholdMinutes) * time.Minute,
-			SchedulerDelayPerDepth:      time.Duration(config.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
-			ThirdPartyDelayThreshold:    time.Duration(config.ThirdPartyDelayThresholdSeconds) * time.Second,
-			ThirdPartyDelayStartHourUTC: config.ThirdPartyDelayStartHourUTC,
+			RuntimeDelayThreshold:       time.Duration(alertConfig.RuntimeDelayThresholdMinutes) * time.Minute,
+			SchedulerDelayPerDepth:      time.Duration(alertConfig.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
+			ThirdPartyDelayThreshold:    time.Duration(alertConfig.ThirdPartyDelayThresholdSeconds) * time.Second,
+			ThirdPartyDelayStartHourUTC: alertConfig.ThirdPartyDelayStartHourUTC,
 			ThirdPartyTypes:             thirdPartyTypes,
 		}),
 	}
@@ -159,6 +173,13 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 	}
 	sort.Slice(targetNames, func(i, j int) bool { return targetNames[i] < targetNames[j] })
 
+	// one SLA deadline per target, resolved once for the whole project
+	targetedSLA := getTargetedSLA(s.l, jobsWithDetails, jobSchedules)
+	if len(targetedSLA) == 0 {
+		s.l.Warn("no targeted SLA found in the schedule range, skipping root-cause evaluation", "project", projectName.String())
+		return nil, nil
+	}
+
 	var detections []scheduler.RootCauseDetection
 	for batchStart := 0; batchStart < len(targetNames); batchStart += s.lineageBatchSize {
 		batchEnd := min(batchStart+s.lineageBatchSize, len(targetNames))
@@ -166,7 +187,7 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 		for _, name := range targetNames[batchStart:batchEnd] {
 			batch[name] = jobSchedules[name]
 		}
-		batchDetections, err := s.evaluateBatch(ctx, batch, reqConfig)
+		batchDetections, err := s.evaluateBatch(ctx, batch, targetedSLA, reqConfig)
 		if err != nil {
 			// one oversized or broken batch should not stop the remaining batches
 			s.l.Error("failed to evaluate lineage batch for root causes, skipping",
@@ -178,19 +199,40 @@ func (s *JobRootCauseService) evaluateProject(ctx context.Context, projectName t
 	return detections, nil
 }
 
-// evaluateBatch builds the upstream lineage for one batch of targets and runs the
-// publisher on each target of that batch.
-func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, reqConfig RootCauseRequestConfig) ([]scheduler.RootCauseDetection, error) {
+// evaluateBatch builds the upstream lineage for one batch of targets, runs the shared
+// inferred-SLA breach analysis per target and hands the finding to the publisher.
+func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules map[scheduler.JobName]*scheduler.JobSchedule, targetedSLA map[scheduler.JobName]*time.Time, reqConfig RootCauseRequestConfig) ([]scheduler.RootCauseDetection, error) {
 	jobsWithLineageMap, err := s.jobLineageFetcher.GetJobLineage(ctx, jobSchedules, int(reqConfig.ScheduleRangeInHours.Hours()))
 	if err != nil {
 		return nil, err
 	}
 
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
-	historicalByJob, err := s.fetchHistoricalDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames, jobsWithLineageMap)
+	historicalByJob, err := s.fetchBaselineDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames, jobsWithLineageMap)
 	if err != nil {
 		return nil, err
 	}
+
+	// the inferred-SLA calculation reuses the potential-SLA API's estimator settings
+	slaDurations, err := s.slaDurationEstimator.GetPercentileDurationByJobNames(ctx, reqConfig.ReferenceTime, uniqueJobNames)
+	if err != nil {
+		return nil, err
+	}
+	startOffsets := map[scheduler.JobName]*time.Duration{}
+	if s.startDelayEstimator != nil {
+		startOffsets, err = s.startDelayEstimator.GetPercentileStartDelayByJobNames(ctx, uniqueJobNames, reqConfig.ReferenceTime,
+			s.potentialConfig.HistoricalStartConfig.LastNRuns, s.potentialConfig.HistoricalStartConfig.Percentile)
+		if err != nil {
+			s.l.Error("failed to get historical start offsets, falling back to deadline-driven safe start", "error", err)
+			startOffsets = map[scheduler.JobName]*time.Duration{}
+		}
+	}
+
+	// one memoized getter per batch: the finder asks for the same (job, run) pair once
+	// per target sharing that upstream, which otherwise multiplies into repeated queries
+	changeGetter := newMemoizedScheduleGetter(s.scheduledChangeGetter)
+	finder := rootcause.NewIdentifier(s.l, changeGetter, nil, nil, rootcause.IdentifierConfig{})
+	damperFactor := s.damperFactor()
 
 	var detections []scheduler.RootCauseDetection
 	for _, jobSchedule := range jobSchedules {
@@ -198,21 +240,33 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 		if !ok || target == nil {
 			continue
 		}
+		sla, ok := targetedSLA[jobSchedule.JobName]
+		if !ok || sla == nil {
+			continue
+		}
+		finding := finder.FindInferredBreaches(ctx, target, slaDurations, startOffsets, sla, nil, damperFactor, reqConfig.ReferenceTime)
 		detections = append(detections, s.publisher.Evaluate(rootcause.TargetEvaluation{
 			Target:          target,
 			HistoricalByJob: historicalByJob,
+			Finding:         finding,
 			ReferenceTime:   reqConfig.ReferenceTime,
 		})...)
 	}
 	return detections, nil
 }
 
-// fetchHistoricalDurations builds the per-job historical task/hook baseline the Tier 1
+// damperFactor mirrors the potential-SLA API's zero-value fallback so both engines infer
+// identical deadlines from the same damper coefficient.
+func (s *JobRootCauseService) damperFactor() scheduler.DamperFactor {
+	return scheduler.DamperFactor{Alpha: s.potentialConfig.DamperCoeff}
+}
+
+// fetchBaselineDurations builds the per-job historical task/hook baseline the RUNTIME_DELAY
 // induced-delay math compares against. Jobs without history evaluate against a zero baseline.
-func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) (map[scheduler.JobName]scheduler.JobHistoricalDuration, error) {
+func (s *JobRootCauseService) fetchBaselineDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) (map[scheduler.JobName]scheduler.JobHistoricalDuration, error) {
 	historical := make(map[scheduler.JobName]scheduler.JobHistoricalDuration, len(jobNames))
 
-	taskDurations, err := s.durationEstimator.GetPercentileDurationByJobNamesByTask(ctx, referenceTime, jobNames)
+	taskDurations, err := s.baselineEstimator.GetPercentileDurationByJobNamesByTask(ctx, referenceTime, jobNames)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +280,7 @@ func (s *JobRootCauseService) fetchHistoricalDurations(ctx context.Context, refe
 	if len(hookNames) == 0 {
 		return historical, nil
 	}
-	hookDurations, err := s.durationEstimator.GetPercentileDurationByJobNamesByHookName(ctx, referenceTime, jobNames, hookNames)
+	hookDurations, err := s.baselineEstimator.GetPercentileDurationByJobNamesByHookName(ctx, referenceTime, jobNames, hookNames)
 	if err != nil {
 		return nil, err
 	}
@@ -492,4 +546,30 @@ func impactedJobNames(impacts []scheduler.ImpactedJob) []string {
 		names = append(names, impacted.ProjectName.String()+"/"+impacted.JobName.String())
 	}
 	return names
+}
+
+// memoizedScheduleGetter caches recent-schedule-change lookups for the lifetime of one
+// evaluation batch: the inferred-SLA finder asks for the same (job, run) pair once per
+// target sharing that upstream, which otherwise multiplies into repeated queries. Errors
+// are not cached so a transient failure retries on the next target.
+type memoizedScheduleGetter struct {
+	inner rootcause.ScheduledChangeGetter
+	cache map[string]string
+}
+
+func newMemoizedScheduleGetter(inner rootcause.ScheduledChangeGetter) *memoizedScheduleGetter {
+	return &memoizedScheduleGetter{inner: inner, cache: map[string]string{}}
+}
+
+func (m *memoizedScheduleGetter) GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, scheduledAt time.Time) (string, error) {
+	key := tnnt.ProjectName().String() + "/" + jobName.String() + "/" + scheduledAt.UTC().Format(time.RFC3339)
+	if hit, ok := m.cache[key]; ok {
+		return hit, nil
+	}
+	value, err := m.inner.GetRecentScheduleChange(ctx, jobName, tnnt, scheduledAt)
+	if err != nil {
+		return value, err
+	}
+	m.cache[key] = value
+	return value, nil
 }

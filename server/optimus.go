@@ -484,10 +484,18 @@ func (s *OptimusServer) setupHandlers() error {
 
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, s.conf.Alerting.RootCause, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository, thirdPartyUpstreamTypes, jobRunRepo, schedulerRepo.NewSLABreachIncidentRepository(s.dbPool))
 
-	// Root-Cause Publisher Service: persists incidents and alerts the responsible teams
+	// Root-Cause Publisher Service: persists incidents and alerts the responsible teams.
+	// The inferred-SLA gate shares the potential-SLA API's damper and estimator settings;
+	// the runtime baseline uses its own (median-by-default) estimator.
 	slaBreachIncidentRepository := schedulerRepo.NewSLABreachIncidentRepository(s.dbPool)
-	newJobRootCauseService := schedulerService.NewJobRootCauseService(s.logger, s.conf.Alerting.RootCauseAlert, jobProviderRepo, jobLineageService,
-		newDurationEstimatorService, slaBreachIncidentRepository, thirdPartyUpstreamTypes, alertsHandler, tProjectService)
+	rootCauseBaselineEstimator := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
+		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.LastNRuns, s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.Percentile,
+		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.PaddingPercentage, s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.MinPaddingMinutes,
+		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.MaxPaddingMinutes)
+	newJobRootCauseService := schedulerService.NewJobRootCauseService(s.logger, s.conf.Alerting.RootCauseAlert, s.conf.Alerting.PotentialSLABreachConfig,
+		jobProviderRepo, jobLineageService,
+		rootCauseBaselineEstimator, newDurationEstimatorService, jobRunRepo, newJobRunService,
+		slaBreachIncidentRepository, thirdPartyUpstreamTypes, alertsHandler, tProjectService)
 
 	// Job Estimator Service
 	newJobExpectatorDurationEstimatorService := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,

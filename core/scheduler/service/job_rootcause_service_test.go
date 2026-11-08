@@ -121,6 +121,28 @@ func (m *mockRootCauseNotifier) SendRootCauseBreach(alert *scheduler.RootCauseBr
 	m.Called(alert)
 }
 
+// mockRootCauseScheduleChangeGetter is a local rootcause.ScheduledChangeGetter mock.
+type mockRootCauseScheduleChangeGetter struct {
+	mock.Mock
+}
+
+func (m *mockRootCauseScheduleChangeGetter) GetRecentScheduleChange(ctx context.Context, jobName scheduler.JobName, tnnt tenant.Tenant, scheduledAt time.Time) (string, error) {
+	args := m.Called(ctx, jobName, tnnt, scheduledAt)
+	return args.String(0), args.Error(1)
+}
+
+// rcScheduleChangeGetter returns a schedule-change getter that never reports a change.
+func rcScheduleChangeGetter() *mockRootCauseScheduleChangeGetter {
+	getter := &mockRootCauseScheduleChangeGetter{}
+	getter.On("GetRecentScheduleChange", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", nil)
+	return getter
+}
+
+// rcPotentialConfig is the potential-SLA config the engine shares with the potential API.
+func rcPotentialConfig() config.PotentialSLABreachConfig {
+	return config.PotentialSLABreachConfig{DamperCoeff: 1.0}
+}
+
 type mockProjectTeamGetter struct {
 	mock.Mock
 }
@@ -227,6 +249,9 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		}
 		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
 			Return(durationsByJob, nil).Once()
+		// the same estimator doubles as the SLA duration estimator in these fixtures
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(durationsByJob, nil).Once()
 		return estimator
 	}
 
@@ -244,9 +269,12 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		return service.NewJobRootCauseService(
 			log.NewNoop(),
 			*alertConfig,
+			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator,
+			estimator, estimator,
+			nil,
+			rcScheduleChangeGetter(),
 			repo,
 			[]string{"dex"},
 			notifier,
@@ -468,7 +496,10 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		svc := service.NewJobRootCauseService(
 			log.NewNoop(),
 			config.RootCauseAlertConfig{ExcludeProjects: []string{"p_root"}},
-			&mockRootCauseDetailsGetter{}, &mockRootCauseLineageFetcher{}, &mockRootCauseDurationEstimator{},
+			rcPotentialConfig(),
+			&mockRootCauseDetailsGetter{}, &mockRootCauseLineageFetcher{},
+			&mockRootCauseDurationEstimator{}, &mockRootCauseDurationEstimator{},
+			nil, rcScheduleChangeGetter(),
 			repo, []string{"dex"}, notifier, &mockProjectTeamGetter{},
 		)
 
@@ -605,6 +636,8 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		}
 		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
 			Return(durationsByJob, nil).Times(3)
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(durationsByJob, nil).Times(3)
 
 		repo := &mockIncidentRepository{}
 		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Times(3)
@@ -690,6 +723,8 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 		}
 		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
 			Return(durationsByJob, nil).Once()
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(durationsByJob, nil).Once()
 		return detailsGetter, lineageFetcher, estimator
 	}
 
@@ -711,9 +746,12 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 		svc := service.NewJobRootCauseService(
 			log.NewNoop(),
 			*alertConfig,
+			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator,
+			estimator, estimator,
+			nil,
+			rcScheduleChangeGetter(),
 			repo,
 			[]string{"dex"},
 			notifier,
@@ -895,6 +933,8 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 		estimator := &mockRootCauseDurationEstimator{}
 		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
 			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
 
 		// an incident that was active before this tick, with a stale blast radius
 		offenderKey := scheduler.SLABreachIncidentKey{
@@ -936,9 +976,12 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 				SchedulerDelayMinutesPerDepth:   2.5,
 				ThirdPartyDelayThresholdSeconds: 600,
 			},
+			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator,
+			estimator, estimator,
+			nil,
+			rcScheduleChangeGetter(),
 			repo,
 			[]string{"dex"},
 			notifier,
@@ -1005,6 +1048,11 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 			"job_target":   rcDurPtr(150 * time.Minute),
 			"job_upstream": rcDurPtr(64 * time.Minute),
 		}, nil)
+	estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+		Return(map[scheduler.JobName]*time.Duration{
+			"job_target":   rcDurPtr(150 * time.Minute),
+			"job_upstream": rcDurPtr(64 * time.Minute),
+		}, nil)
 
 	newRepo := func(previous *scheduler.SLABreachIncident) *mockIncidentRepository {
 		repo := &mockIncidentRepository{}
@@ -1055,8 +1103,9 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 			assert.Equal(t, scheduler.TierRuntimeDelay, alert.Reason.Reason)
 		})
 
-		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, detailsGetter, lineageFetcher,
-			estimator, newRepo(storedRunning), []string{"dex"}, notifier, teamGetter)
+		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, rcPotentialConfig(), detailsGetter, lineageFetcher,
+			estimator, estimator, nil, rcScheduleChangeGetter(),
+			newRepo(storedRunning), []string{"dex"}, notifier, teamGetter)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},
@@ -1074,8 +1123,9 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 	t.Run("later ticks with the cause still finished stay silent", func(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 
-		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, detailsGetter, lineageFetcher,
-			estimator, newRepo(storedFinished), []string{"dex"}, notifier, teamGetter)
+		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, rcPotentialConfig(), detailsGetter, lineageFetcher,
+			estimator, estimator, nil, rcScheduleChangeGetter(),
+			newRepo(storedFinished), []string{"dex"}, notifier, teamGetter)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
 			ProjectNames:         []tenant.ProjectName{projectName},

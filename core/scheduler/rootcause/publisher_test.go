@@ -84,11 +84,24 @@ func detectionsByReason(detections []scheduler.RootCauseDetection, reason schedu
 	return matched
 }
 
+// permissiveFinding builds a gate-passing BreachFinding whose only leaf is the named job.
+// The reason detectors operate on the walk, not on the finding, so tier tests only need
+// the gate satisfied; gate-specific tests build their own findings.
+func permissiveFinding(target *scheduler.JobLineageSummary) *rootcause.BreachFinding {
+	return &rootcause.BreachFinding{
+		Leaves: []*scheduler.JobState{{
+			JobName: target.JobName,
+			JobRun:  scheduler.JobRunSummary{JobName: target.JobName},
+		}},
+	}
+}
+
 func eval(target *scheduler.JobLineageSummary, historical map[scheduler.JobName]scheduler.JobHistoricalDuration, referenceTime time.Time) []scheduler.RootCauseDetection {
 	return testPublisher().Evaluate(rootcause.TargetEvaluation{
 		Target:          target,
 		ReferenceTime:   referenceTime,
 		HistoricalByJob: historical,
+		Finding:         permissiveFinding(target),
 	})
 }
 
@@ -346,5 +359,78 @@ func TestPublisher_Evaluate(t *testing.T) {
 		runtime := detectionsByReason(detections, scheduler.TierRuntimeDelay)
 		assert.Len(t, runtime, 1)
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
+	})
+}
+
+// TestPublisher_InferredBreachGate covers the potential-first gate: without a leaf cause
+// from the inferred-SLA analysis nothing is detected, and breach status follows the
+// target's own deadline.
+func TestPublisher_InferredBreachGate(t *testing.T) {
+	publisher := testPublisher()
+	// reference is past the target's SLA (10:00 + 2h)
+	referenceTime := testBaseTime.Add(3 * time.Hour)
+	targetRun := makeRun("job_target", testBaseTime,
+		ptr(testBaseTime.Add(time.Hour)), nil, "running")
+	target := makeLineage("job_target", testTenant, targetRun)
+	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+		"job_target": {TaskDuration: 4 * time.Hour},
+	}
+
+	t.Run("no finding means no detection", func(t *testing.T) {
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+		})
+		assert.Empty(t, detections)
+	})
+
+	t.Run("a finding without leaves means no detection", func(t *testing.T) {
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: &rootcause.BreachFinding{},
+		})
+		assert.Empty(t, detections)
+	})
+
+	t.Run("a target past its SLA is an actual breach", func(t *testing.T) {
+		detections := eval(target, historical, referenceTime)
+		if assert.Len(t, detections, 1) {
+			assert.Equal(t, scheduler.TierAggressiveSLA, detections[0].Reason.Reason)
+			assert.Equal(t, scheduler.BreachStatusActual, detections[0].BreachStatus)
+		}
+	})
+
+	t.Run("a target within its SLA with an upstream breach is potential", func(t *testing.T) {
+		// the target is still within its SLA deadline (reference before 12:00)
+		withinSLA := testBaseTime.Add(time.Hour)
+		detections := eval(target, historical, withinSLA)
+		// no reason applies here (the target started on time and is within baseline), so
+		// a potential breach with no cause stays unrecorded
+		assert.Empty(t, detections)
+
+		// with an upstream slow enough to detect, the same finding is a potential breach
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
+		upstream := makeLineage("job_upstream", testTenant, upstreamRun)
+		targetWithUpstream := makeLineage("job_target", testTenant, targetRun, upstream)
+		historical["job_upstream"] = scheduler.JobHistoricalDuration{TaskDuration: 10 * time.Minute}
+		detections = eval(targetWithUpstream, historical, withinSLA)
+		if assert.Len(t, detections, 1) {
+			assert.Equal(t, scheduler.TierRuntimeDelay, detections[0].Reason.Reason)
+			assert.Equal(t, scheduler.BreachStatusPotential, detections[0].BreachStatus)
+		}
+	})
+
+	t.Run("a leaf other than the target never becomes AGGRESSIVE_SLA", func(t *testing.T) {
+		finding := &rootcause.BreachFinding{
+			Leaves: []*scheduler.JobState{{
+				JobName: "job_upstream",
+				JobRun:  scheduler.JobRunSummary{JobName: "job_upstream"},
+			}},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+		assert.Empty(t, detections)
 	})
 }

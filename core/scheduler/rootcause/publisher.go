@@ -51,11 +51,14 @@ type TargetEvaluation struct {
 	Target *scheduler.JobLineageSummary
 	// HistoricalByJob holds the historical task/hook baseline per job reachable from the target
 	HistoricalByJob map[scheduler.JobName]scheduler.JobHistoricalDuration
-	ReferenceTime   time.Time
-	WalkOpts        scheduler.LineageWalkOptions
+	// Finding is the shared inferred-SLA breach analysis of the target; the gate below
+	// requires at least one leaf cause before any reason is evaluated.
+	Finding       *BreachFinding
+	ReferenceTime time.Time
+	WalkOpts      scheduler.LineageWalkOptions
 }
 
-// Evaluate runs the breach gate and the six reason detectors for one target. An empty
+// Evaluate runs the breach gate and the reason detectors for one target. An empty
 // result means the target did not breach or produced no explanation.
 func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection {
 	if ev.Target == nil {
@@ -77,10 +80,16 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		return nil
 	}
 
-	// breach gate: the target missed its SLA deadline — finished after it, or still
-	// running past it
-	if !breachedSLA(targetRun, ev.ReferenceTime) {
+	// inferred-breach gate: potential-first — without at least one node breaching its
+	// inferred SLA there is nothing to explain, so no detection is raised or recorded
+	if ev.Finding == nil || len(ev.Finding.Leaves) == 0 {
 		return nil
+	}
+	// an actual breach outranks a predicted one
+	breached := breachedSLA(targetRun, ev.ReferenceTime)
+	breachStatus := scheduler.BreachStatusPotential
+	if breached {
+		breachStatus = scheduler.BreachStatusActual
 	}
 
 	impacted := []scheduler.ImpactedJob{{
@@ -99,14 +108,23 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierSchedulerDelay(walk, walk.GatingPath(), impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
+	for i := range detections {
+		detections[i].BreachStatus = breachStatus
+	}
 
-	// if the target breached but nothing upstream explains it, then the SLA is too
-	// aggressive for what the lineage actually delivers
+	// if nothing explains the breach, the SLA is too aggressive for what the lineage
+	// delivers — but only when the target is past its SLA and is itself the only leaf
+	// cause: a potential miss with no cause says nothing about the SLA yet, and a leaf
+	// elsewhere would have been detected above
 	if len(detections) == 0 {
+		if !breached || len(ev.Finding.Leaves) != 1 || ev.Finding.Leaves[0].JobName != ev.Target.JobName {
+			return nil
+		}
 		return []scheduler.RootCauseDetection{{
 			IncidentKey:  incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
 			Reason:       scheduler.RootCauseReasonDetail{Reason: scheduler.TierAggressiveSLA, Status: scheduler.ReasonStatusActive},
 			ImpactedJobs: impacted,
+			BreachStatus: breachStatus,
 		}}
 	}
 	return detections

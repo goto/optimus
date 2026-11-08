@@ -404,6 +404,7 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 					Reason:               reason,
 					ImpactedJobs:         impactedJobNames(incident.Impacts),
 					Severity:             s.config.AlertSeverity,
+					BreachStatus:         incident.Incident.Details.BreachStatus,
 				}
 				// scheduler-attributed alerts drop the per-run identity so the alert_logs
 				// deduplication collapses every backed-up run into one platform alert

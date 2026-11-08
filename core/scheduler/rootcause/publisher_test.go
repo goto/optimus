@@ -508,6 +508,34 @@ func TestPublisher_CauseChain(t *testing.T) {
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
 	})
 
+	t.Run("a started running leaf is measured against the scheduler budget", func(t *testing.T) {
+		// b1 scheduled 09:00 but only started 10:40 (85m past its latest-finished upstream's
+		// 09:15 end), still running: the gating path would stop at the target and never
+		// measure it, the walk scan does
+		startedB1 := makeRun("job_b1", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(40*time.Minute)), nil, "running")
+		startedTarget := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_b1", tenantProjB, startedB1,
+				makeLineage("job_a2", tenantProjA, a2Run)))
+		b1Finding := &rootcause.BreachFinding{
+			Leaves: []*scheduler.JobState{{
+				JobName: "job_b1",
+				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			}},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: startedTarget, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: b1Finding,
+		})
+
+		schedulerDetections := detectionsByReason(detections, scheduler.TierSchedulerDelay)
+		if assert.Len(t, schedulerDetections, 1) {
+			assert.Equal(t, "job_b1", schedulerDetections[0].IncidentKey.JobName.String())
+			assert.Equal(t, int(85*time.Minute/time.Second), schedulerDetections[0].Reason.InducedDelaySeconds)
+			assert.False(t, schedulerDetections[0].Reason.IsJobFinished)
+		}
+	})
+
 	t.Run("an unknown leaf falls back to the target's wait chain", func(t *testing.T) {
 		finding := &rootcause.BreachFinding{
 			Leaves: []*scheduler.JobState{{

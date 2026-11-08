@@ -106,7 +106,7 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	detections := p.tierFailedUpstream(walk, impacted)
 	detections = append(detections, p.tierWaitingUpstream(walk, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
-	detections = append(detections, p.tierSchedulerDelay(walk, walk.GatingPath(), impacted)...)
+	detections = append(detections, p.tierSchedulerDelay(walk, impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
 	for i := range detections {
 		detections[i].BreachStatus = breachStatus
@@ -171,12 +171,12 @@ func (*Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.JobE
 	return chain
 }
 
-// causeChain is the wait chain of the inferred-breach leaf causes: each leaf, the
-// blocking frontier directly upstream of it and the finished history behind them. It
-// anchors runtime and third-party attribution on the jobs actually causing the breach
-// instead of the target's whole wait chain. Falls back to the full wait chain when a
-// leaf has no matching run in the walk (a diamond may have resolved a different run on
-// the tightest path).
+// causeChain is the upstream closure of the inferred-breach leaf causes: each leaf plus
+// every run reachable from it through real upstream edges. It anchors runtime and
+// third-party attribution on the jobs actually causing the breach — including running
+// ancestors a single latest-finished thread would miss — instead of the target's whole
+// walk. Falls back to the full wait chain when a leaf has no matching run in the walk
+// (a diamond may have resolved a different run on the tightest path).
 func (p *Publisher) causeChain(walk *scheduler.LineageWalkResult, finding *BreachFinding) []*scheduler.JobExecutionSummary {
 	if finding == nil || len(finding.Leaves) == 0 {
 		return p.waitChain(walk)
@@ -184,33 +184,26 @@ func (p *Publisher) causeChain(walk *scheduler.LineageWalkResult, finding *Breac
 
 	chain := make([]*scheduler.JobExecutionSummary, 0, len(walk.Nodes))
 	seen := map[scheduler.JobRunKey]bool{}
-	appendChain := func(start *scheduler.JobExecutionSummary) {
-		for current := start; current != nil && !seen[current.Key()]; {
-			seen[current.Key()] = true
-			chain = append(chain, current)
-			current = latestFinishedUpstream(walk, current)
-		}
-	}
-
 	for _, leaf := range finding.Leaves {
 		leafNode, ok := walk.NodesByKey[scheduler.NewJobRunKey(leaf.JobName, leaf.JobRun.ScheduledAt)]
 		if !ok {
 			return p.waitChain(walk)
 		}
-		seen[leafNode.Key()] = true
-		chain = append(chain, leafNode)
-
-		// the blocking frontier directly upstream of the leaf, each with the finished
-		// history behind it
-		for _, upstreamKey := range walk.UpstreamsByKey[leafNode.Key()] {
-			upstream, ok := walk.NodesByKey[upstreamKey]
-			if !ok || !upstream.IsBlocking {
+		stack := []*scheduler.JobExecutionSummary{leafNode}
+		for len(stack) > 0 {
+			node := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if seen[node.Key()] {
 				continue
 			}
-			appendChain(upstream)
+			seen[node.Key()] = true
+			chain = append(chain, node)
+			for _, upstreamKey := range walk.UpstreamsByKey[node.Key()] {
+				if upstream, ok := walk.NodesByKey[upstreamKey]; ok {
+					stack = append(stack, upstream)
+				}
+			}
 		}
-		// finished history behind the leaf itself
-		appendChain(latestFinishedUpstream(walk, leafNode))
 	}
 	return chain
 }
@@ -390,16 +383,19 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 // thirdPartyDailyBoundary was moved to ThirdPartyDailyBoundary so the identifier and the
 // publisher measure sensor waits against the same daily window.
 
-// tierSchedulerDelay attributes the scheduler itself for nodes on the gating path whose
+// tierSchedulerDelay attributes the scheduler itself for started nodes in the walk whose
 // system scheduling delay exceeds the per-level budget, and whose upstreams all succeeded —
 // a wait caused by a failed upstream is FAILED_UPSTREAM's finding, not the scheduler's.
+// The whole walk is scanned (like FAILED_UPSTREAM and WAITING_UPSTREAM): scheduler delay
+// shows up on the propagation path downstream of the leaf cause as much as on its
+// ancestry, and the gating path alone never sees in-flight frontier nodes.
 //
 // The delay is computed here (not read from DelaySummary, which only GenerateLineage-
 // ExecutionSummary fills) with the same formula the summary uses: the wait from the later
-// of the node's schedule and its gating upstream's finish until the task start.
-func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, path []*scheduler.JobExecutionSummary, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+// of the node's schedule and its latest-finished upstream's end until the task start.
+func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	var detections []scheduler.RootCauseDetection
-	for i, node := range path {
+	for _, node := range walk.Nodes {
 		// the target itself has no gating upstream, so its wait is indistinguishable from
 		// ordinary queueing; only lineage nodes carry the scheduler-delay signal
 		if node.Level == 0 || node.JobRunSummary.TaskStartTime == nil {
@@ -410,8 +406,8 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, path [
 		}
 
 		delay := node.JobRunSummary.TaskStartTime.Sub(node.JobRunSummary.ScheduledAt)
-		if i < len(path)-1 {
-			if upstreamEnd := path[i+1].JobRunSummary.GetActualEndTime(); upstreamEnd != nil && upstreamEnd.After(node.JobRunSummary.ScheduledAt) {
+		if upstream := latestFinishedUpstream(walk, node); upstream != nil {
+			if upstreamEnd := upstream.JobRunSummary.GetActualEndTime(); upstreamEnd.After(node.JobRunSummary.ScheduledAt) {
 				delay = node.JobRunSummary.TaskStartTime.Sub(*upstreamEnd)
 			}
 		}

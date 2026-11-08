@@ -434,3 +434,96 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 		assert.Empty(t, detections)
 	})
 }
+
+// TestPublisher_CauseChain anchors RUNTIME_DELAY and THIRD_PARTY_DELAY attribution on the
+// inferred-breach leaves instead of the target's whole wait chain.
+func TestPublisher_CauseChain(t *testing.T) {
+	publisher := testPublisher()
+	referenceTime := testBaseTime.Add(3 * time.Hour) // past the target's SLA
+
+	// chain: target <- stuck leaf-side frontier (b1 waiting on its sensor) <- a2 finished
+	// far over baseline <- healthy c1 that the gating path would have included
+	c1Run := makeRun("job_c1", testBaseTime.Add(-4*time.Hour),
+		ptr(testBaseTime.Add(-4*time.Hour)), ptr(testBaseTime.Add(-2*time.Hour)), "success")
+	a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
+		ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-45*time.Minute)), "success")
+	b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour), nil, nil, "running")
+	b1Run.SensorName = strPtr("wait_dex_events")
+	b1Run.WaitStartTime = ptr(testBaseTime.Add(-30 * time.Minute))
+	targetRun := makeRun("job_target", testBaseTime,
+		ptr(testBaseTime.Add(time.Hour)), nil, "running")
+	target := makeLineage("job_target", testTenant, targetRun,
+		makeLineage("job_b1", tenantProjB, b1Run,
+			makeLineage("job_a2", tenantProjA, a2Run,
+				makeLineage("job_c1", tenantProjB, c1Run))))
+
+	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+		"job_target": {TaskDuration: 90 * time.Minute},
+		"job_a2":     {TaskDuration: 30 * time.Minute},
+		"job_c1":     {TaskDuration: 2 * time.Hour},
+	}
+	// the leaf cause is a2, the finished job whose runtime blew past its baseline
+	finding := &rootcause.BreachFinding{
+		Leaves: []*scheduler.JobState{{
+			JobName: "job_a2",
+			JobRun:  scheduler.JobRunSummary{JobName: "job_a2", ScheduledAt: testBaseTime.Add(-2 * time.Hour)},
+		}},
+	}
+
+	t.Run("attribution follows the leaf's chain, not the target's whole wait chain", func(t *testing.T) {
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+
+		runtime := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, runtime, 1, "only the leaf's induced delay is attributed")
+		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
+		// a2's overrun: 1h15m runtime minus its 30m baseline = 45m
+		assert.Equal(t, int((45 * time.Minute / time.Second)), runtime[0].Reason.InducedDelaySeconds)
+		// b1's sensor wait sits between the leaf and the target, so it is impact
+		// propagation, not a cause; a stuck sensor would itself be the leaf
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierThirdPartyDelay))
+	})
+
+	t.Run("a sensor-stuck leaf carries its own wait and the history behind it", func(t *testing.T) {
+		// b1 waiting on its own third-party sensor is the leaf; its finished history
+		// (a2, over baseline) still belongs to the chain
+		b1Finding := &rootcause.BreachFinding{
+			Leaves: []*scheduler.JobState{{
+				JobName: "job_b1",
+				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			}},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: b1Finding,
+		})
+
+		thirdParty := detectionsByReason(detections, scheduler.TierThirdPartyDelay)
+		assert.Len(t, thirdParty, 1)
+		assert.Equal(t, "job_b1", thirdParty[0].IncidentKey.JobName.String())
+		runtime := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, runtime, 1)
+		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
+	})
+
+	t.Run("an unknown leaf falls back to the target's wait chain", func(t *testing.T) {
+		finding := &rootcause.BreachFinding{
+			Leaves: []*scheduler.JobState{{
+				JobName: "job_ghost",
+				JobRun:  scheduler.JobRunSummary{JobName: "job_ghost"},
+			}},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+
+		// the full wait chain includes c1, whose runtime is at its baseline, and a2
+		runtime := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, runtime, 1)
+		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
+		assert.NotEmpty(t, detectionsByReason(detections, scheduler.TierThirdPartyDelay))
+	})
+}

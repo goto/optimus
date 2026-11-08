@@ -1,6 +1,7 @@
 package rootcause
 
 import (
+	"sort"
 	"time"
 
 	"github.com/goto/optimus/core/scheduler"
@@ -98,10 +99,9 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		ScheduledAt: targetRun.ScheduledAt,
 	}}
 
-	// the gating path covers the finished portion of the wait chain; for an in-flight
-	// lineage the chain continues through the blocking frontier and the finished upstreams
-	// behind it, so the tiers below see the full chain the target is waiting on
-	chain := p.waitChain(walk)
+	// the cause chain covers what the inferred-breach leaves are actually waiting on;
+	// scheduler delay is measured in the next step over the same chain
+	chain := p.causeChain(walk, ev.Finding)
 
 	detections := p.tierFailedUpstream(walk, impacted)
 	detections = append(detections, p.tierWaitingUpstream(walk, ev.ReferenceTime, impacted)...)
@@ -167,6 +167,50 @@ func (*Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.JobE
 			}
 			current = next
 		}
+	}
+	return chain
+}
+
+// causeChain is the wait chain of the inferred-breach leaf causes: each leaf, the
+// blocking frontier directly upstream of it and the finished history behind them. It
+// anchors runtime and third-party attribution on the jobs actually causing the breach
+// instead of the target's whole wait chain. Falls back to the full wait chain when a
+// leaf has no matching run in the walk (a diamond may have resolved a different run on
+// the tightest path).
+func (p *Publisher) causeChain(walk *scheduler.LineageWalkResult, finding *BreachFinding) []*scheduler.JobExecutionSummary {
+	if finding == nil || len(finding.Leaves) == 0 {
+		return p.waitChain(walk)
+	}
+
+	chain := make([]*scheduler.JobExecutionSummary, 0, len(walk.Nodes))
+	seen := map[scheduler.JobRunKey]bool{}
+	appendChain := func(start *scheduler.JobExecutionSummary) {
+		for current := start; current != nil && !seen[current.Key()]; {
+			seen[current.Key()] = true
+			chain = append(chain, current)
+			current = latestFinishedUpstream(walk, current)
+		}
+	}
+
+	for _, leaf := range finding.Leaves {
+		leafNode, ok := walk.NodesByKey[scheduler.NewJobRunKey(leaf.JobName, leaf.JobRun.ScheduledAt)]
+		if !ok {
+			return p.waitChain(walk)
+		}
+		seen[leafNode.Key()] = true
+		chain = append(chain, leafNode)
+
+		// the blocking frontier directly upstream of the leaf, each with the finished
+		// history behind it
+		for _, upstreamKey := range walk.UpstreamsByKey[leafNode.Key()] {
+			upstream, ok := walk.NodesByKey[upstreamKey]
+			if !ok || !upstream.IsBlocking {
+				continue
+			}
+			appendChain(upstream)
+		}
+		// finished history behind the leaf itself
+		appendChain(latestFinishedUpstream(walk, leafNode))
 	}
 	return chain
 }
@@ -448,15 +492,22 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 	}
 
 	// conditions 2 and 3: among the projects with no individually-delayed job, take the one
-	// with the largest flat-summed induced delay when it crosses the threshold
+	// with the largest flat-summed induced delay when it crosses the threshold; ties on
+	// the total resolve to the lowest project name
 	var maxProject tenant.ProjectName
 	var maxTotal, maxJobDelay time.Duration
 	var maxNode *scheduler.JobExecutionSummary
-	for projectName, total := range inducedByProject {
+	projectNames := make([]tenant.ProjectName, 0, len(inducedByProject))
+	for projectName := range inducedByProject {
+		projectNames = append(projectNames, projectName)
+	}
+	sort.Slice(projectNames, func(i, j int) bool { return projectNames[i] < projectNames[j] })
+	for _, projectName := range projectNames {
+		total := inducedByProject[projectName]
 		if detectedProjects[projectName] || total <= p.config.RuntimeDelayThreshold {
 			continue
 		}
-		if total > maxTotal {
+		if maxNode == nil || total > maxTotal {
 			maxProject, maxTotal = projectName, total
 		}
 	}

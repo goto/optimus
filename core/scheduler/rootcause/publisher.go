@@ -12,7 +12,7 @@ type PublisherConfig struct {
 	SchedulerDelayPerDepth   time.Duration
 	ThirdPartyDelayThreshold time.Duration
 	// ThirdPartyDelayStartHourUTC anchors the daily sensor-incident boundary; see
-	// thirdPartyDailyBoundary.
+	// ThirdPartyDailyBoundary.
 	ThirdPartyDelayStartHourUTC int
 	ThirdPartyTypes             []string
 }
@@ -262,7 +262,7 @@ func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, 
 		return nil
 	}
 
-	boundary := thirdPartyDailyBoundary(referenceTime, p.config.ThirdPartyDelayStartHourUTC)
+	boundary := ThirdPartyDailyBoundary(referenceTime, p.config.ThirdPartyDelayStartHourUTC)
 	seen := map[scheduler.JobRunKey]bool{}
 	var detections []scheduler.RootCauseDetection
 
@@ -325,18 +325,8 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 	return ""
 }
 
-// thirdPartyDailyBoundary is the most recent daily boundary at startHourUTC at or before
-// the reference time, in UTC. Sensors lack a native scheduled_at, so the boundary doubles
-// as the incident key's scheduled_at (one incident per sensor per day) and as the floor of
-// the measured wait. A start hour of 18, for example, yields the 01:00 JKT boundary.
-func thirdPartyDailyBoundary(referenceTime time.Time, startHourUTC int) time.Time {
-	reference := referenceTime.UTC()
-	boundary := time.Date(reference.Year(), reference.Month(), reference.Day(), startHourUTC, 0, 0, 0, time.UTC)
-	if boundary.After(reference) {
-		boundary = boundary.AddDate(0, 0, -1)
-	}
-	return boundary
-}
+// thirdPartyDailyBoundary was moved to ThirdPartyDailyBoundary so the identifier and the
+// publisher measure sensor waits against the same daily window.
 
 // tierSchedulerDelay attributes the scheduler itself for nodes on the gating path whose
 // system scheduling delay exceeds the per-level budget, and whose upstreams all succeeded —

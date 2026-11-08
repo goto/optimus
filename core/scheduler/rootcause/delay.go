@@ -6,8 +6,6 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 )
 
-const defaultThirdPartyDelayStartHour = 0
-
 func inducedDelay(state scheduler.JobState, referenceTime time.Time, delayStartHourUTC int) time.Duration {
 	switch state.Reason {
 	case scheduler.ReasonRunningLong:
@@ -81,14 +79,15 @@ func effectiveSafeStart(state scheduler.JobState) time.Time {
 	return safeStart
 }
 
-// thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, delay-start hour
-// on the completion calendar day in UTC). Wait before that UTC hour is not treated as impact.
+// thirdPartyInducedDelay is sensor completion (or now) minus max(sensor start, the shared
+// daily boundary — see ThirdPartyDailyBoundary). Wait before that boundary is not treated
+// as impact.
 func thirdPartyInducedDelay(state scheduler.JobState, referenceTime time.Time, delayStartHourUTC int) time.Duration {
 	end := referenceTime
 	if state.JobRun.WaitEndTime != nil {
 		end = *state.JobRun.WaitEndTime
 	}
-	delayFrom := delayStartUTC(end, delayStartHourUTC)
+	delayFrom := ThirdPartyDailyBoundary(end, delayStartHourUTC)
 	start := delayFrom
 	if state.JobRun.WaitStartTime != nil {
 		start = *state.JobRun.WaitStartTime
@@ -109,14 +108,6 @@ func thirdPartyDelayExceedsThreshold(state scheduler.JobState, referenceTime tim
 		threshold = 0
 	}
 	return thirdPartyInducedDelay(state, referenceTime, delayStartHourUTC) > threshold
-}
-
-func delayStartUTC(at time.Time, hour int) time.Time {
-	if hour < 0 || hour > 23 {
-		hour = defaultThirdPartyDelayStartHour
-	}
-	utc := at.UTC()
-	return time.Date(utc.Year(), utc.Month(), utc.Day(), hour, 0, 0, 0, time.UTC)
 }
 
 func (i *Identifier) annotateInducedDelay(state scheduler.JobState, referenceTime time.Time) scheduler.JobState {

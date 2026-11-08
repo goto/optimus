@@ -71,6 +71,34 @@ func TestInducedDelay(t *testing.T) {
 		assert.Equal(t, 2*time.Hour, inducedDelay(state, ref, 6))
 	})
 
+	t.Run("third party wait ending after midnight UTC spans back to the previous day's boundary", func(t *testing.T) {
+		// wait 2026-09-09 20:00 -> 2026-09-10 01:30 UTC with the 18:00 UTC boundary: the
+		// boundary is the previous day's 18:00, so the wait is measured in full (5h30m).
+		// The old per-calendar-day boundary measured zero for this wait.
+		waitStart := time.Date(2026, 9, 9, 20, 0, 0, 0, time.UTC)
+		waitEnd := time.Date(2026, 9, 10, 1, 30, 0, 0, time.UTC)
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonThirdPartyDelay,
+			JobRun: scheduler.JobRunSummary{
+				WaitStartTime: &waitStart,
+				WaitEndTime:   &waitEnd,
+			},
+		}
+		assert.Equal(t, 5*time.Hour+30*time.Minute, inducedDelay(state, waitEnd, 18))
+	})
+
+	t.Run("third party wait within the same boundary day is measured from the boundary", func(t *testing.T) {
+		// wait 18:30 -> 19:00 UTC with the 18:00 boundary: counted from the wait start
+		state := scheduler.JobState{
+			Reason: scheduler.ReasonThirdPartyDelay,
+			JobRun: scheduler.JobRunSummary{
+				WaitStartTime: at(18, 30),
+				WaitEndTime:   at(19, 0),
+			},
+		}
+		assert.Equal(t, 30*time.Minute, inducedDelay(state, ref, 18))
+	})
+
 	t.Run("started late delay is floored at the job's own schedule, not the naive cascade safe start", func(t *testing.T) {
 		// estimate 40m, inferred SLA 06:00 -> naive safe start 05:20; but the job's own
 		// schedule is 05:40 (SLA budget too tight for the full upstream chain). Started

@@ -39,11 +39,11 @@ type JobRootCauseService struct {
 	baselineEstimator DurationEstimator
 	// slaDurationEstimator and startDelayEstimator feed the inferred-SLA calculation with
 	// the same estimator settings the potential-SLA API uses, so both agree on deadlines
-	potentialConfig        config.PotentialSLABreachConfig
-	slaDurationEstimator   DurationEstimator
-	startDelayEstimator    StartDelayEstimator
-	scheduledChangeGetter  rootcause.ScheduledChangeGetter
-	incidentRepo           scheduler.SLABreachIncidentRepository
+	potentialConfig       config.PotentialSLABreachConfig
+	slaDurationEstimator  DurationEstimator
+	startDelayEstimator   StartDelayEstimator
+	scheduledChangeGetter rootcause.ScheduledChangeGetter
+	incidentRepo          scheduler.SLABreachIncidentRepository
 	publisher             *rootcause.Publisher
 	// alert routing
 	rootCauseNotifier RootCauseBreachNotifier

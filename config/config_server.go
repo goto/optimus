@@ -141,7 +141,7 @@ type RootCauseAlertConfig struct {
 	SchedulerDelayMinutesPerDepth float64 `mapstructure:"scheduler_delay_minutes_per_depth" default:"2.5"`
 	// ThirdPartyDelayStartHourUTC is the UTC hour (0-23) from which sensor wait
 	// counts as induced delay. Wait before that hour is ignored.
-	ThirdPartyDelayStartHourUTC     int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
+	ThirdPartyDelayStartHourUTC int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
 	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
 	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"900"`
 

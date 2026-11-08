@@ -266,7 +266,8 @@ func TestPublisher_Evaluate(t *testing.T) {
 	})
 
 	t.Run("tier 5: stuck node with successful upstreams becomes the incident", func(t *testing.T) {
-		// a2 succeeded; b1 has no run row at all (missing run) but is past its own SLA
+		// a2 succeeded; b1 has no run row at all (missing run) but is past its latest safe
+		// start — the inferred-SLA NOT_STARTED condition
 		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
 			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-90*time.Minute)), "success")
 		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour), nil, nil, "")
@@ -280,7 +281,18 @@ func TestPublisher_Evaluate(t *testing.T) {
 			"job_target": {TaskDuration: 90 * time.Minute},
 		}
 
-		detections := eval(target, historical, referenceTime)
+		finding := permissiveFinding(target)
+		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
+			"job_b1": {
+				JobName: "job_b1",
+				Status:  scheduler.SLABreachCauseNotStarted,
+				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			},
+		}
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
 
 		matched := detectionsByReason(detections, scheduler.TierWaitingUpstream)
 		assert.Len(t, matched, 1)
@@ -432,6 +444,76 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 			Finding: finding,
 		})
 		assert.Empty(t, detections)
+	})
+}
+
+// TestPublisher_WaitingUpstreamSafeStart pins the stuck-state condition to the
+// inferred-SLA NOT_STARTED analysis: within the latest safe start a stuck-looking node is
+// just early, past it the node is genuinely stuck.
+func TestPublisher_WaitingUpstreamSafeStart(t *testing.T) {
+	publisher := testPublisher()
+	referenceTime := testBaseTime.Add(3 * time.Hour)
+
+	buildTarget := func() (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
+			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-90*time.Minute)), "success")
+		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour), nil, nil, "")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_b1", tenantProjB, b1Run,
+				makeLineage("job_a2", tenantProjA, a2Run)))
+		return target, b1Run
+	}
+	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+		"job_target": {TaskDuration: 90 * time.Minute},
+	}
+
+	t.Run("a stuck node past its latest safe start is detected", func(t *testing.T) {
+		target, b1Run := buildTarget()
+		finding := permissiveFinding(target)
+		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
+			"job_b1": {
+				JobName: "job_b1",
+				Status:  scheduler.SLABreachCauseNotStarted,
+				JobRun:  *b1Run,
+			},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+		assert.Len(t, detectionsByReason(detections, scheduler.TierWaitingUpstream), 1)
+	})
+
+	t.Run("a stuck node still within its safe start is not detected", func(t *testing.T) {
+		// same geometry, but the inferred-SLA analysis has not flagged b1 yet
+		target, _ := buildTarget()
+		finding := permissiveFinding(target)
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierWaitingUpstream))
+	})
+
+	t.Run("a flagged run from another lineage path does not qualify the node", func(t *testing.T) {
+		// the NOT_STARTED flag belongs to a different run of job_b1 (a diamond's other
+		// branch), so this walk's run is not stuck
+		target, _ := buildTarget()
+		finding := permissiveFinding(target)
+		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
+			"job_b1": {
+				JobName: "job_b1",
+				Status:  scheduler.SLABreachCauseNotStarted,
+				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-3 * time.Hour)},
+			},
+		}
+		detections := publisher.Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierWaitingUpstream))
 	})
 }
 

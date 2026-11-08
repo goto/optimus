@@ -104,7 +104,7 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	chain := p.causeChain(walk, ev.Finding)
 
 	detections := p.tierFailedUpstream(walk, impacted)
-	detections = append(detections, p.tierWaitingUpstream(walk, ev.ReferenceTime, impacted)...)
+	detections = append(detections, p.tierWaitingUpstream(walk, ev.Finding, impacted)...)
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierSchedulerDelay(walk, impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
@@ -247,11 +247,13 @@ func (*Publisher) tierFailedUpstream(walk *scheduler.LineageWalkResult, impacted
 	return detections
 }
 
-// tierWaitingUpstream catches structural stuck states: the node is not running and not finished,
-// yet every resolved upstream is either successful or missing entirely (uncreated runs, depends_on_past self-waits).
-// Nodes whose upstreams failed are FAILED_UPSTREAM's finding; nodes waiting on a still-running
-// upstream are just normal waiting.
-func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+// tierWaitingUpstream catches structural stuck states: the node is not running and not
+// finished, is past its latest safe start (its inferred SLA minus its own duration — the
+// NOT_STARTED breach condition), yet every resolved upstream is either successful or
+// missing entirely (uncreated runs, depends_on_past self-waits).
+// Nodes whose upstreams failed are FAILED_UPSTREAM's finding; nodes waiting on a
+// still-running upstream are just normal waiting.
+func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, finding *BreachFinding, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	var detections []scheduler.RootCauseDetection
 	for _, node := range walk.Nodes {
 		if !isStuckState(node) {
@@ -263,13 +265,10 @@ func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, refer
 		if !upstreamsSuccessOrMissing(walk, node) {
 			continue
 		}
-		// a mid-lineage node must be past its own SLA to count as stuck; the target is
-		// already past the breach gate, so it needs no extra check
-		if node.Level > 0 {
-			run := node.JobRunSummary
-			if run.SLATime == nil || !referenceTime.After(*run.SLATime) {
-				continue
-			}
+		// the node must be past its latest safe start per the inferred-SLA analysis, so a
+		// node still within its own slack is not stuck yet
+		if !isPastSafeStart(node, finding) {
+			continue
 		}
 		detections = append(detections, scheduler.RootCauseDetection{
 			IncidentKey:  nodeIncidentKey(node),
@@ -278,6 +277,19 @@ func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, refer
 		})
 	}
 	return detections
+}
+
+// isPastSafeStart reports whether the node's run is flagged NOT_STARTED by the inferred-SLA
+// analysis; the run must match so a diamond's other runs don't qualify the node.
+func isPastSafeStart(node *scheduler.JobExecutionSummary, finding *BreachFinding) bool {
+	if finding == nil {
+		return false
+	}
+	state, ok := finding.BreachStates[node.JobName]
+	if !ok || state.Status != scheduler.SLABreachCauseNotStarted {
+		return false
+	}
+	return state.JobRun.ScheduledAt.UTC().Equal(node.JobRunSummary.ScheduledAt.UTC())
 }
 
 func isStuckState(node *scheduler.JobExecutionSummary) bool {

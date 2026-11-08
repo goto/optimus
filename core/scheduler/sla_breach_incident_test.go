@@ -177,3 +177,103 @@ func TestSLABreachIncident_ActiveReasons(t *testing.T) {
 	assert.False(t, incident.HasActiveReason())
 	assert.Empty(t, incident.ActiveReasons())
 }
+
+func TestMergeResolvedReasons(t *testing.T) {
+	baseTime := time.Date(2026, 10, 26, 1, 0, 0, 0, time.UTC)
+	key := scheduler.SLABreachIncidentKey{
+		ProjectName: tenant.ProjectName("p_proj"),
+		JobName:     scheduler.JobName("job_root"),
+		ScheduledAt: baseTime,
+	}
+
+	t.Run("fresh incident without previous is unchanged", func(t *testing.T) {
+		fresh := &scheduler.SLABreachIncident{
+			Key:     key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 2400}}},
+		}
+
+		merged := scheduler.MergeResolvedReasons(fresh, nil)
+
+		assert.Len(t, merged.Details.Reasons, 1)
+		assert.Equal(t, scheduler.ReasonStatusActive, merged.Details.Reasons[0].Status)
+		assert.Equal(t, 2400, merged.MaxInducedDelaySeconds)
+	})
+
+	t.Run("a reason that disappeared from the fresh tick is flipped to resolved", func(t *testing.T) {
+		fresh := &scheduler.SLABreachIncident{
+			Key:     key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 2400}}},
+		}
+		previous := &scheduler.SLABreachIncident{
+			Key: key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{
+				{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 2400},
+				{Reason: scheduler.TierFailedUpstream, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 900},
+			}},
+			MaxInducedDelaySeconds: 2400,
+		}
+
+		merged := scheduler.MergeResolvedReasons(fresh, previous)
+
+		assert.Len(t, merged.Details.Reasons, 2)
+		byReason := map[scheduler.SLABreachTier]scheduler.RootCauseReasonDetail{}
+		for _, reason := range merged.Details.Reasons {
+			byReason[reason.Reason] = reason
+		}
+		assert.Equal(t, scheduler.ReasonStatusActive, byReason[scheduler.TierRuntimeDelay].Status, "fresh observation stays active")
+		assert.Equal(t, scheduler.ReasonStatusResolved, byReason[scheduler.TierFailedUpstream].Status, "disappeared reason flips to resolved")
+		assert.Equal(t, 900, byReason[scheduler.TierFailedUpstream].InducedDelaySeconds, "last delay and evidence are preserved")
+		// the high-water mark survives resolution
+		assert.Equal(t, 2400, merged.MaxInducedDelaySeconds)
+	})
+
+	t.Run("a resolved reason that comes back is active again without duplication", func(t *testing.T) {
+		fresh := &scheduler.SLABreachIncident{
+			Key:     key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 3000}}},
+		}
+		previous := &scheduler.SLABreachIncident{
+			Key: key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{
+				{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusResolved, InducedDelaySeconds: 2400},
+			}},
+		}
+
+		merged := scheduler.MergeResolvedReasons(fresh, previous)
+
+		assert.Len(t, merged.Details.Reasons, 1)
+		assert.Equal(t, scheduler.ReasonStatusActive, merged.Details.Reasons[0].Status)
+		assert.Equal(t, 3000, merged.Details.Reasons[0].InducedDelaySeconds, "the fresh observation wins")
+	})
+
+	t.Run("an incident whose every reason disappeared has no active reason left", func(t *testing.T) {
+		fresh := &scheduler.SLABreachIncident{Key: key}
+		previous := &scheduler.SLABreachIncident{
+			Key: key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{
+				{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 2400},
+			}},
+			MaxInducedDelaySeconds: 2400,
+		}
+
+		merged := scheduler.MergeResolvedReasons(fresh, previous)
+
+		assert.Len(t, merged.Details.Reasons, 1)
+		assert.False(t, merged.HasActiveReason(), "the subscriber's active filter stops on it")
+		assert.Equal(t, 2400, merged.MaxInducedDelaySeconds, "high-water mark is kept")
+	})
+
+	t.Run("inputs are not modified", func(t *testing.T) {
+		fresh := &scheduler.SLABreachIncident{Key: key}
+		previous := &scheduler.SLABreachIncident{
+			Key:     key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive}}},
+		}
+
+		scheduler.MergeResolvedReasons(fresh, previous)
+
+		assert.Len(t, previous.Details.Reasons, 1)
+		assert.Equal(t, scheduler.ReasonStatusActive, previous.Details.Reasons[0].Status, "previous keeps its original status")
+		assert.Len(t, fresh.Details.Reasons, 0)
+	})
+}

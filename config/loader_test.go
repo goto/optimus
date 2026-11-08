@@ -325,6 +325,22 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 			Percentile: 50,
 		},
 	}
+	s.expectedServerConfig.Alerting.RootCauseAlert = config.RootCauseAlertConfig{
+		RuntimeDelayThresholdMinutes:    30,
+		SchedulerDelayMinutesPerDepth:   2.5,
+		ThirdPartyDelayThresholdSeconds: 900,
+		DedupWindowMinutes:              60,
+		AlertSeverity:                   "WARNING",
+		LineageBatchSize:                50,
+		BaselineDurationConfig: config.BaselineDurationConfig{
+			LastNRuns:         7,
+			Percentile:        50,
+			PaddingPercentage: 0,
+			MinPaddingMinutes: 0,
+			MaxPaddingMinutes: 1000,
+		},
+		// platform teams default to empty: routing is disabled until configured
+	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
 		BufferDurationInMinutes: 10,
 		DurationEstimatorConfig: config.DurationEstimatorConfig{

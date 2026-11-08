@@ -25,7 +25,7 @@ func (c PublisherConfig) withDefaults() PublisherConfig {
 		c.SchedulerDelayPerDepth = 150 * time.Second // 2.5 minutes
 	}
 	if c.ThirdPartyDelayThreshold <= 0 {
-		c.ThirdPartyDelayThreshold = 10 * time.Minute
+		c.ThirdPartyDelayThreshold = 15 * time.Minute
 	}
 	if c.ThirdPartyDelayStartHourUTC < 0 || c.ThirdPartyDelayStartHourUTC > 23 {
 		c.ThirdPartyDelayStartHourUTC = 0

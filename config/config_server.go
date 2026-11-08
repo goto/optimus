@@ -142,7 +142,8 @@ type RootCauseAlertConfig struct {
 	// ThirdPartyDelayStartHourUTC is the UTC hour (0-23) from which sensor wait
 	// counts as induced delay. Wait before that hour is ignored.
 	ThirdPartyDelayStartHourUTC     int `mapstructure:"third_party_delay_start_hour_utc" default:"0"`
-	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"600"`
+	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
+	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"900"`
 
 	DedupWindowMinutes int                    `mapstructure:"dedup_window_minutes" default:"60"`
 	InfraTeam          string                 `mapstructure:"infra_team"`
@@ -154,6 +155,24 @@ type RootCauseAlertConfig struct {
 	// during root-cause identification; lower it if identify requests exhaust memory.
 	// 0 keeps the built-in default.
 	LineageBatchSize int `mapstructure:"lineage_batch_size" default:"50"`
+	// BaselineDurationConfig is the estimator for the historical task/hook runtime
+	// baseline the RUNTIME_DELAY induced-delay math compares against. It is separate
+	// from the SLA duration estimator so the two can be tuned independently.
+	BaselineDurationConfig BaselineDurationConfig `mapstructure:"baseline_duration_estimator"`
+	// AggressiveSLAAlertEnabled turns AGGRESSIVE_SLA alerts on; incidents are detected
+	// and recorded either way. Keep it off while the alert is being validated.
+	AggressiveSLAAlertEnabled bool `mapstructure:"aggressive_sla_alert_enabled" default:"false"`
+}
+
+// BaselineDurationConfig is the estimator behind the historical task/hook runtime
+// baseline of RUNTIME_DELAY induced delay. Defaults to the median (P50) runtime so the
+// threshold measures typical slippage, not tail slippage.
+type BaselineDurationConfig struct {
+	LastNRuns         int `mapstructure:"last_n_runs" default:"7"`
+	Percentile        int `mapstructure:"percentile" default:"50"`
+	PaddingPercentage int `mapstructure:"padding_percentage" default:"0"`
+	MinPaddingMinutes int `mapstructure:"min_padding_minutes" default:"0"`
+	MaxPaddingMinutes int `mapstructure:"max_padding_minutes" default:"1000"`
 }
 
 // AlertSuppressionConfig tunes which root-cause alerts are sent, while every incident

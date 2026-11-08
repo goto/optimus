@@ -144,7 +144,9 @@ alerting:
     # hour. 18 = 01:00 WIB.
     third_party_delay_start_hour_utc: 18
     # ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
-    third_party_delay_threshold_seconds: 600
+    # All third-party data is expected to land by 01:00 WIB; a wait still open past the
+    # boundary plus this floor is the signal.
+    third_party_delay_threshold_seconds: 900
     # DedupWindowMinutes is how long an alert type suppresses repeats for the same entity.
     dedup_window_minutes: 60
     # InfraTeam receives SCHEDULER_DELAY alerts.
@@ -174,6 +176,19 @@ alerting:
     # project; lower it (e.g. 25) if identify requests exhaust the server's memory.
     # 0 keeps the built-in default of 50.
     lineage_batch_size: 50
+    # BaselineDurationConfig is the estimator for the historical task/hook runtime
+    # baseline the RUNTIME_DELAY induced-delay math compares against. Defaults to the
+    # median (P50) runtime, so the 30-minute threshold measures typical slippage rather
+    # than tail slippage.
+    baseline_duration_estimator:
+      last_n_runs: 7
+      percentile: 50
+      padding_percentage: 0
+      min_padding_minutes: 0
+      max_padding_minutes: 1000
+    # AggressiveSLAAlertEnabled turns AGGRESSIVE_SLA alerts on. Incidents are detected
+    # and recorded either way; keep the alert off while it is being validated.
+    aggressive_sla_alert_enabled: false
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

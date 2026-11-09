@@ -23,6 +23,9 @@ type RootCauseRequestConfig struct {
 	ReferenceTime        time.Time
 	EnableAlert          bool
 	ScheduleRangeInHours time.Duration
+	// DamperFactor overrides the configured damper coefficient for this run when set;
+	// an unset Alpha falls back to the potential-SLA config.
+	DamperFactor scheduler.DamperFactor
 }
 
 // JobRootCauseService is the Publisher of the Publisher-Subscriber SLA alerting model: it
@@ -231,7 +234,7 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 	// per target sharing that upstream, which otherwise multiplies into repeated queries
 	changeGetter := newMemoizedScheduleGetter(s.scheduledChangeGetter)
 	finder := rootcause.NewIdentifier(s.l, changeGetter, nil, nil, rootcause.IdentifierConfig{})
-	damperFactor := s.damperFactor()
+	damperFactor := s.damperFactor(reqConfig)
 
 	var detections []scheduler.RootCauseDetection
 	for _, jobSchedule := range jobSchedules {
@@ -254,10 +257,15 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 	return detections, nil
 }
 
-// damperFactor mirrors the potential-SLA API's zero-value fallback so both engines infer
-// identical deadlines from the same damper coefficient.
-func (s *JobRootCauseService) damperFactor() scheduler.DamperFactor {
-	return scheduler.DamperFactor{Alpha: s.potentialConfig.DamperCoeff}
+// damperFactor prioritizes the request's damper and falls back to the configured
+// coefficient, mirroring the potential-SLA API's zero-value fallback so both engines
+// infer identical deadlines when neither is set.
+func (s *JobRootCauseService) damperFactor(reqConfig RootCauseRequestConfig) scheduler.DamperFactor {
+	damperFactor := reqConfig.DamperFactor
+	if damperFactor.Alpha <= 0 {
+		damperFactor.Alpha = s.potentialConfig.DamperCoeff
+	}
+	return damperFactor
 }
 
 // activeIncidentScanWindow is how far back the resolution pass looks for incidents that

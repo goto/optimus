@@ -249,7 +249,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		}
 		// the same estimator doubles as the SLA duration estimator in these fixtures
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Times(2)
+			Return(durationsByJob, nil).Once()
 		return estimator
 	}
 
@@ -270,7 +270,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator, estimator,
+			estimator,
 			nil,
 			rcScheduleChangeGetter(),
 			repo,
@@ -497,7 +497,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			config.RootCauseAlertConfig{ExcludeProjects: []string{"p_root"}},
 			rcPotentialConfig(),
 			&mockRootCauseDetailsGetter{}, &mockRootCauseLineageFetcher{},
-			&mockRootCauseDurationEstimator{}, &mockRootCauseDurationEstimator{},
+			&mockRootCauseDurationEstimator{},
 			nil, rcScheduleChangeGetter(),
 			repo, []string{"dex"}, notifier, &mockProjectTeamGetter{},
 		)
@@ -634,7 +634,7 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			durationsByJob[scheduler.JobName(jobName)] = &duration
 		}
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Times(6)
+			Return(durationsByJob, nil).Times(3)
 
 		repo := &mockIncidentRepository{}
 		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Times(3)
@@ -719,7 +719,7 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 			durationsByJob[scheduler.JobName(jobName)] = &duration
 		}
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Times(2)
+			Return(durationsByJob, nil).Once()
 		return detailsGetter, lineageFetcher, estimator
 	}
 
@@ -744,7 +744,7 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator, estimator,
+			estimator,
 			nil,
 			rcScheduleChangeGetter(),
 			repo,
@@ -930,7 +930,7 @@ func TestJobRootCauseService_AggressiveSLAAlertSuppression(t *testing.T) {
 		estimator := &mockRootCauseDurationEstimator{}
 		durPtr := func(d time.Duration) *time.Duration { return &d }
 		durations := map[scheduler.JobName]*time.Duration{"job_target": durPtr(150 * time.Minute)}
-		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).Return(durations, nil).Times(2)
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).Return(durations, nil).Once()
 
 		repo := &mockIncidentRepository{}
 		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
@@ -970,7 +970,7 @@ func TestJobRootCauseService_AggressiveSLAAlertSuppression(t *testing.T) {
 			},
 			rcPotentialConfig(),
 			detailsGetter, lineageFetcher,
-			estimator, estimator, nil, rcScheduleChangeGetter(),
+			estimator, nil, rcScheduleChangeGetter(),
 			repo, []string{"dex"}, notifier, teamGetter,
 		)
 
@@ -1035,7 +1035,7 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 
 		estimator := &mockRootCauseDurationEstimator{}
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(map[scheduler.JobName]*time.Duration{}, nil).Times(2)
+			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
 
 		// an incident that was active before this tick, with a stale blast radius
 		offenderKey := scheduler.SLABreachIncidentKey{
@@ -1080,7 +1080,7 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 			rcPotentialConfig(),
 			detailsGetter,
 			lineageFetcher,
-			estimator, estimator,
+			estimator,
 			nil,
 			rcScheduleChangeGetter(),
 			repo,
@@ -1148,7 +1148,7 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		Return(map[scheduler.JobName]*time.Duration{
 			"job_target":   rcDurPtr(150 * time.Minute),
 			"job_upstream": rcDurPtr(64 * time.Minute),
-		}, nil).Times(4)
+		}, nil).Times(2)
 
 	newRepo := func(previous *scheduler.SLABreachIncident) *mockIncidentRepository {
 		repo := &mockIncidentRepository{}
@@ -1200,7 +1200,7 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		})
 
 		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, rcPotentialConfig(), detailsGetter, lineageFetcher,
-			estimator, estimator, nil, rcScheduleChangeGetter(),
+			estimator, nil, rcScheduleChangeGetter(),
 			newRepo(storedRunning), []string{"dex"}, notifier, teamGetter)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
@@ -1220,7 +1220,7 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 
 		svc := service.NewJobRootCauseService(log.NewNoop(), *alertConfig, rcPotentialConfig(), detailsGetter, lineageFetcher,
-			estimator, estimator, nil, rcScheduleChangeGetter(),
+			estimator, nil, rcScheduleChangeGetter(),
 			newRepo(storedFinished), []string{"dex"}, notifier, teamGetter)
 
 		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{

@@ -34,13 +34,11 @@ type JobRootCauseService struct {
 	config            config.RootCauseAlertConfig
 	jobDetailsGetter  JobDetailsGetter
 	jobLineageFetcher JobLineageFetcher
-	// baselineEstimator builds the historical task/hook baseline the RUNTIME_DELAY
-	// induced-delay math compares against (root_cause_alert.baseline_duration_estimator)
-	baselineEstimator DurationEstimator
-	// slaDurationEstimator and startDelayEstimator feed the inferred-SLA calculation with
-	// the same estimator settings the potential-SLA API uses, so both agree on deadlines
+	// durationEstimator feeds both the inferred-SLA calculation and the RUNTIME_DELAY
+	// induced-delay baseline, with the potential-SLA API's settings (single source of
+	// truth: alerting.potential_sla_breach_config.duration_estimator_config)
+	durationEstimator     DurationEstimator
 	potentialConfig       config.PotentialSLABreachConfig
-	slaDurationEstimator  DurationEstimator
 	startDelayEstimator   StartDelayEstimator
 	scheduledChangeGetter rootcause.ScheduledChangeGetter
 	incidentRepo          scheduler.SLABreachIncidentRepository
@@ -74,7 +72,7 @@ const defaultLineageBatchSize = 50
 
 func NewJobRootCauseService(l log.Logger, alertConfig config.RootCauseAlertConfig, potentialConfig config.PotentialSLABreachConfig,
 	jobDetailsGetter JobDetailsGetter, jobLineageFetcher JobLineageFetcher,
-	baselineEstimator, slaDurationEstimator DurationEstimator, startDelayEstimator StartDelayEstimator,
+	durationEstimator DurationEstimator, startDelayEstimator StartDelayEstimator,
 	scheduledChangeGetter rootcause.ScheduledChangeGetter,
 	incidentRepo scheduler.SLABreachIncidentRepository, thirdPartyTypes []string,
 	rootCauseNotifier RootCauseBreachNotifier, projectTeamGetter ProjectTeamGetter,
@@ -89,8 +87,7 @@ func NewJobRootCauseService(l log.Logger, alertConfig config.RootCauseAlertConfi
 		potentialConfig:       potentialConfig,
 		jobDetailsGetter:      jobDetailsGetter,
 		jobLineageFetcher:     jobLineageFetcher,
-		baselineEstimator:     baselineEstimator,
-		slaDurationEstimator:  slaDurationEstimator,
+		durationEstimator:     durationEstimator,
 		startDelayEstimator:   startDelayEstimator,
 		scheduledChangeGetter: scheduledChangeGetter,
 		incidentRepo:          incidentRepo,
@@ -208,15 +205,17 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 	}
 
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
-	historicalByJob, err := s.fetchBaselineDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames)
+	// one estimator fetch serves both the inferred-SLA calculation and the induced-delay
+	// baseline — one config (the potential-SLA API's settings), one source of truth
+	durationEstimates, err := s.durationEstimator.GetPercentileDurationByJobNames(ctx, reqConfig.ReferenceTime, uniqueJobNames)
 	if err != nil {
 		return nil, err
 	}
-
-	// the inferred-SLA calculation reuses the potential-SLA API's estimator settings
-	slaDurations, err := s.slaDurationEstimator.GetPercentileDurationByJobNames(ctx, reqConfig.ReferenceTime, uniqueJobNames)
-	if err != nil {
-		return nil, err
+	historicalByJob := make(map[scheduler.JobName]time.Duration, len(durationEstimates))
+	for jobName, duration := range durationEstimates {
+		if duration != nil {
+			historicalByJob[jobName] = *duration
+		}
 	}
 	startOffsets := map[scheduler.JobName]*time.Duration{}
 	if s.startDelayEstimator != nil {
@@ -244,7 +243,7 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 		if !ok || sla == nil {
 			continue
 		}
-		finding := finder.FindInferredBreaches(ctx, target, slaDurations, startOffsets, sla, nil, damperFactor, reqConfig.ReferenceTime)
+		finding := finder.FindInferredBreaches(ctx, target, durationEstimates, startOffsets, sla, nil, damperFactor, reqConfig.ReferenceTime)
 		detections = append(detections, s.publisher.Evaluate(rootcause.TargetEvaluation{
 			Target:          target,
 			HistoricalByJob: historicalByJob,
@@ -259,23 +258,6 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 // identical deadlines from the same damper coefficient.
 func (s *JobRootCauseService) damperFactor() scheduler.DamperFactor {
 	return scheduler.DamperFactor{Alpha: s.potentialConfig.DamperCoeff}
-}
-
-// fetchBaselineDurations builds the per-job historical task+hook runtime baseline the
-// RUNTIME_DELAY induced-delay math compares against. Jobs without history evaluate
-// against a zero baseline.
-func (s *JobRootCauseService) fetchBaselineDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]time.Duration, error) {
-	estimates, err := s.baselineEstimator.GetPercentileDurationByJobNames(ctx, referenceTime, jobNames)
-	if err != nil {
-		return nil, err
-	}
-	historical := make(map[scheduler.JobName]time.Duration, len(jobNames))
-	for _, jobName := range jobNames {
-		if duration := estimates[jobName]; duration != nil {
-			historical[jobName] = *duration
-		}
-	}
-	return historical, nil
 }
 
 // activeIncidentScanWindow is how far back the resolution pass looks for incidents that

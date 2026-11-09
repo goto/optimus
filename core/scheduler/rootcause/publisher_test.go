@@ -84,12 +84,12 @@ func detectionsByReason(detections []scheduler.RootCauseDetection, reason schedu
 	return matched
 }
 
-// permissiveFinding builds a gate-passing BreachFinding whose only leaf is the named job.
+// permissiveFinding builds a gate-passing BreachFinding whose only breach origin is the named job.
 // The reason detectors operate on the walk, not on the finding, so tier tests only need
 // the gate satisfied; gate-specific tests build their own findings.
 func permissiveFinding(target *scheduler.JobLineageSummary) *rootcause.BreachFinding {
 	return &rootcause.BreachFinding{
-		Leaves: []*scheduler.JobState{{
+		Origins: []*scheduler.JobState{{
 			JobName: target.JobName,
 			JobRun:  scheduler.JobRunSummary{JobName: target.JobName},
 		}},
@@ -378,7 +378,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 	})
 }
 
-// TestPublisher_InferredBreachGate covers the potential-first gate: without a leaf cause
+// TestPublisher_InferredBreachGate covers the potential-first gate: without a breach origin
 // from the inferred-SLA analysis nothing is detected, and breach status follows the
 // target's own deadline.
 func TestPublisher_InferredBreachGate(t *testing.T) {
@@ -437,9 +437,9 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 		}
 	})
 
-	t.Run("a leaf other than the target never becomes AGGRESSIVE_SLA", func(t *testing.T) {
+	t.Run("a breach origin other than the target never becomes AGGRESSIVE_SLA", func(t *testing.T) {
 		finding := &rootcause.BreachFinding{
-			Leaves: []*scheduler.JobState{{
+			Origins: []*scheduler.JobState{{
 				JobName: "job_upstream",
 				JobRun:  scheduler.JobRunSummary{JobName: "job_upstream"},
 			}},
@@ -528,7 +528,7 @@ func TestPublisher_CauseChain(t *testing.T) {
 	publisher := testPublisher()
 	referenceTime := testBaseTime.Add(3 * time.Hour) // past the target's SLA
 
-	// chain: target <- stuck leaf-side frontier (b1 waiting on its sensor) <- a2 finished
+	// chain: target <- stuck origin-side frontier (b1 waiting on its sensor) <- a2 finished
 	// far over baseline <- healthy c1 that the gating path would have included
 	c1Run := makeRun("job_c1", testBaseTime.Add(-4*time.Hour),
 		ptr(testBaseTime.Add(-4*time.Hour)), ptr(testBaseTime.Add(-2*time.Hour)), "success")
@@ -549,35 +549,35 @@ func TestPublisher_CauseChain(t *testing.T) {
 		"job_a2":     {TaskDuration: 30 * time.Minute},
 		"job_c1":     {TaskDuration: 2 * time.Hour},
 	}
-	// the leaf cause is a2, the finished job whose runtime blew past its baseline
+	// the breach origin is a2, the finished job whose runtime blew past its baseline
 	finding := &rootcause.BreachFinding{
-		Leaves: []*scheduler.JobState{{
+		Origins: []*scheduler.JobState{{
 			JobName: "job_a2",
 			JobRun:  scheduler.JobRunSummary{JobName: "job_a2", ScheduledAt: testBaseTime.Add(-2 * time.Hour)},
 		}},
 	}
 
-	t.Run("attribution follows the leaf's chain, not the target's whole wait chain", func(t *testing.T) {
+	t.Run("attribution follows the breach origin's chain, not the target's whole wait chain", func(t *testing.T) {
 		detections := publisher.Evaluate(rootcause.TargetEvaluation{
 			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
 			Finding: finding,
 		})
 
 		runtime := detectionsByReason(detections, scheduler.TierRuntimeDelay)
-		assert.Len(t, runtime, 1, "only the leaf's induced delay is attributed")
+		assert.Len(t, runtime, 1, "only the breach origin's induced delay is attributed")
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
 		// a2's overrun: 1h15m runtime minus its 30m baseline = 45m
 		assert.Equal(t, int((45 * time.Minute / time.Second)), runtime[0].Reason.InducedDelaySeconds)
-		// b1's sensor wait sits between the leaf and the target, so it is impact
-		// propagation, not a cause; a stuck sensor would itself be the leaf
+		// b1's sensor wait sits between the breach origin and the target, so it is impact
+		// propagation, not a cause; a stuck sensor would itself be the breach origin
 		assert.Empty(t, detectionsByReason(detections, scheduler.TierThirdPartyDelay))
 	})
 
-	t.Run("a sensor-stuck leaf carries its own wait and the history behind it", func(t *testing.T) {
-		// b1 waiting on its own third-party sensor is the leaf; its finished history
+	t.Run("a sensor-stuck breach origin carries its own wait and the history behind it", func(t *testing.T) {
+		// b1 waiting on its own third-party sensor is the breach origin; its finished history
 		// (a2, over baseline) still belongs to the chain
 		b1Finding := &rootcause.BreachFinding{
-			Leaves: []*scheduler.JobState{{
+			Origins: []*scheduler.JobState{{
 				JobName: "job_b1",
 				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
 			}},
@@ -606,7 +606,7 @@ func TestPublisher_CauseChain(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, startedB1,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 		b1Finding := &rootcause.BreachFinding{
-			Leaves: []*scheduler.JobState{{
+			Origins: []*scheduler.JobState{{
 				JobName: "job_b1",
 				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
 			}},
@@ -624,9 +624,9 @@ func TestPublisher_CauseChain(t *testing.T) {
 		}
 	})
 
-	t.Run("an unknown leaf falls back to the target's wait chain", func(t *testing.T) {
+	t.Run("an unknown breach origin falls back to the target's wait chain", func(t *testing.T) {
 		finding := &rootcause.BreachFinding{
-			Leaves: []*scheduler.JobState{{
+			Origins: []*scheduler.JobState{{
 				JobName: "job_ghost",
 				JobRun:  scheduler.JobRunSummary{JobName: "job_ghost"},
 			}},

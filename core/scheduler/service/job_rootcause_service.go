@@ -473,10 +473,6 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 }
 
 func (s *JobRootCauseService) suppressAlert(reason scheduler.RootCauseReasonDetail) bool {
-	// AGGRESSIVE_SLA is recorded but not alerted until explicitly enabled
-	if reason.Reason == scheduler.TierAggressiveSLA && !s.config.AggressiveSLAAlertEnabled {
-		return true
-	}
 	for _, skipped := range s.config.AlertSuppression.SkipReasons {
 		if strings.EqualFold(strings.TrimSpace(skipped), string(reason.Reason)) {
 			return true

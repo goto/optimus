@@ -896,9 +896,10 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 	})
 }
 
-// TestJobRootCauseService_AggressiveSLAAlertFlag: an unexplained actual breach is recorded
-// as AGGRESSIVE_SLA, and only alerts when the flag turns it on.
-func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
+// TestJobRootCauseService_AggressiveSLAAlertSuppression: an unexplained actual breach is
+// recorded as AGGRESSIVE_SLA and alerts the impacted owner unless alert_suppression
+// skip_reasons mutes it like any other reason.
+func TestJobRootCauseService_AggressiveSLAAlertSuppression(t *testing.T) {
 	ctx := context.Background()
 	projectName := tenant.ProjectName("p_root")
 	tnnt := rcTestTenant()
@@ -924,7 +925,7 @@ func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
 		1*time.Hour, rcPtr(targetScheduledAt), nil, "running")
 	lineage := rcMakeLineage("job_target", tnnt, targetRun)
 
-	runScenario := func(alertEnabled bool) ([]*scheduler.SLABreachIncidentWithImpacts, *mockRootCauseNotifier) {
+	runScenario := func(skipReasons []string) ([]*scheduler.SLABreachIncidentWithImpacts, *mockRootCauseNotifier) {
 		detailsGetter := &mockRootCauseDetailsGetter{}
 		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
 		lineageFetcher := &mockRootCauseLineageFetcher{}
@@ -948,7 +949,7 @@ func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
 			})
 
 		notifier := &mockRootCauseNotifier{}
-		if alertEnabled {
+		if len(skipReasons) == 0 {
 			notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(func(args mock.Arguments) {
 				alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
 				assert.Equal(t, scheduler.TierAggressiveSLA, alert.Reason.Reason)
@@ -969,7 +970,9 @@ func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
 				RuntimeDelayThresholdMinutes:    30,
 				SchedulerDelayMinutesPerDepth:   2.5,
 				ThirdPartyDelayThresholdSeconds: 600,
-				AggressiveSLAAlertEnabled:       alertEnabled,
+				AlertSuppression: config.AlertSuppressionConfig{
+					SkipReasons: skipReasons,
+				},
 			},
 			rcPotentialConfig(),
 			detailsGetter, lineageFetcher,
@@ -989,16 +992,16 @@ func TestJobRootCauseService_AggressiveSLAAlertFlag(t *testing.T) {
 		return incidents, notifier
 	}
 
-	t.Run("off by default: recorded without alerting", func(t *testing.T) {
-		incidents, notifier := runScenario(false)
-		assert.Len(t, incidents, 1)
-		notifier.AssertNotCalled(t, "SendRootCauseBreach")
-	})
-
-	t.Run("enabled: alerts the impacted owner", func(t *testing.T) {
-		incidents, notifier := runScenario(true)
+	t.Run("without skip_reasons: recorded and alerted", func(t *testing.T) {
+		incidents, notifier := runScenario(nil)
 		assert.Len(t, incidents, 1)
 		notifier.AssertExpectations(t)
+	})
+
+	t.Run("muted via skip_reasons: recorded without alerting", func(t *testing.T) {
+		incidents, notifier := runScenario([]string{"aggressive_sla"}) // case-insensitive
+		assert.Len(t, incidents, 1)
+		notifier.AssertNotCalled(t, "SendRootCauseBreach")
 	})
 }
 

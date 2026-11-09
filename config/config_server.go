@@ -156,9 +156,6 @@ type RootCauseAlertConfig struct {
 	// baseline the RUNTIME_DELAY induced-delay math compares against. It is separate
 	// from the SLA duration estimator so the two can be tuned independently.
 	BaselineDurationConfig BaselineDurationConfig `mapstructure:"baseline_duration_estimator"`
-	// AggressiveSLAAlertEnabled turns AGGRESSIVE_SLA alerts on; incidents are detected
-	// and recorded either way. Keep it off while the alert is being validated.
-	AggressiveSLAAlertEnabled bool `mapstructure:"aggressive_sla_alert_enabled" default:"false"`
 }
 
 // BaselineDurationConfig is the estimator behind the historical task/hook runtime

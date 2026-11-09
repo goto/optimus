@@ -117,20 +117,20 @@ func (i *Identifier) Identify(
 	map[scheduler.JobName]*scheduler.JobState,
 	map[scheduler.JobName][]*scheduler.JobState,
 ) {
-	// find every breaching job and its leaf causes via the shared inferred-SLA analysis
+	// find every breaching job and its breach origins via the shared inferred-SLA analysis
 	finding := i.FindInferredBreaches(ctx, jobTarget, jobDurations, startOffsets, targetedSLA, skipJobNames, damperFactor, referenceTime)
-	if len(finding.Leaves) == 0 {
+	if len(finding.Origins) == 0 {
 		return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
 	}
 
 	// classify (and, where ambiguous, escalate to the upstream that actually caused the
 	// delay) before keying the result maps by JobName: a THIRD_PARTY_DELAY cause is keyed
-	// by the sensor, and when several leaves remain, only the max-delay one is returned.
-	rootCauses := make([][]*scheduler.JobState, 0, len(finding.Leaves))
-	for _, leaf := range finding.Leaves {
-		rootCauses = append(rootCauses, []*scheduler.JobState{leaf})
+	// by the sensor, and when several origins remain, only the max-delay one is returned.
+	rootCauses := make([][]*scheduler.JobState, 0, len(finding.Origins))
+	for _, origin := range finding.Origins {
+		rootCauses = append(rootCauses, []*scheduler.JobState{origin})
 	}
-	rootCauses, breachFullPaths := i.classify(ctx, rootCauses, finding.LeafPaths, finding.NodeByName, finding.SLAStates, referenceTime)
+	rootCauses, breachFullPaths := i.classify(ctx, rootCauses, finding.OriginPaths, finding.NodeByName, finding.SLAStates, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*scheduler.JobState)
@@ -171,7 +171,7 @@ func (i *Identifier) Identify(
 }
 
 // classify resolves the reason behind every path's root cause, escalating to an upstream where
-// the reason turns out to be a relayed delay. It leaves the states it is given untouched and
+// the reason turns out to be a relayed delay. It origins the states it is given untouched and
 // returns both path sets with the resolved causes substituted in, since a cause can be shared
 // between the two sets and can appear mid-path as well as at the end.
 func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [][]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) (resolvedRootCauses, resolvedFullPaths [][]*scheduler.JobState) {
@@ -530,8 +530,8 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 //	T(now) >= S(u|j) and the job u has not completed yet
 //	T(now) >= S(u|j) - D(u) and the job u has not started yet
 //
-// It returns the breach states keyed by job name plus the lineage nodes visited; leaf
-// causes are derived from them by leafCauses.
+// It returns the breach states keyed by job name plus the lineage nodes visited; breach
+// causes are derived from them by breachOrigins.
 func (i *Identifier) findBreachStates(
 	ctx context.Context,
 	jobTarget *scheduler.JobLineageSummary,

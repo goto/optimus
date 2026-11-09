@@ -53,7 +53,7 @@ type TargetEvaluation struct {
 	// HistoricalByJob holds the historical task/hook baseline per job reachable from the target
 	HistoricalByJob map[scheduler.JobName]scheduler.JobHistoricalDuration
 	// Finding is the shared inferred-SLA breach analysis of the target; the gate below
-	// requires at least one leaf cause before any reason is evaluated.
+	// requires at least one breach origin before any reason is evaluated.
 	Finding       *BreachFinding
 	ReferenceTime time.Time
 	WalkOpts      scheduler.LineageWalkOptions
@@ -83,7 +83,7 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 
 	// inferred-breach gate: potential-first — without at least one node breaching its
 	// inferred SLA there is nothing to explain, so no detection is raised or recorded
-	if ev.Finding == nil || len(ev.Finding.Leaves) == 0 {
+	if ev.Finding == nil || len(ev.Finding.Origins) == 0 {
 		return nil
 	}
 	// an actual breach outranks a predicted one
@@ -113,11 +113,11 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	}
 
 	// if nothing explains the breach, the SLA is too aggressive for what the lineage
-	// delivers — but only when the target is past its SLA and is itself the only leaf
-	// cause: a potential miss with no cause says nothing about the SLA yet, and a leaf
+	// delivers — but only when the target is past its SLA and is itself the only breach origin
+	// cause: a potential miss with no cause says nothing about the SLA yet, and a breach origin
 	// elsewhere would have been detected above
 	if len(detections) == 0 {
-		if !breached || len(ev.Finding.Leaves) != 1 || ev.Finding.Leaves[0].JobName != ev.Target.JobName {
+		if !breached || len(ev.Finding.Origins) != 1 || ev.Finding.Origins[0].JobName != ev.Target.JobName {
 			return nil
 		}
 		return []scheduler.RootCauseDetection{{
@@ -171,25 +171,25 @@ func (*Publisher) waitChain(walk *scheduler.LineageWalkResult) []*scheduler.JobE
 	return chain
 }
 
-// causeChain is the upstream closure of the inferred-breach leaf causes: each leaf plus
+// causeChain is the upstream closure of the inferred-breach breach origins: each breach origin plus
 // every run reachable from it through real upstream edges. It anchors runtime and
 // third-party attribution on the jobs actually causing the breach — including running
 // ancestors a single latest-finished thread would miss — instead of the target's whole
-// walk. Falls back to the full wait chain when a leaf has no matching run in the walk
+// walk. Falls back to the full wait chain when a breach origin has no matching run in the walk
 // (a diamond may have resolved a different run on the tightest path).
 func (p *Publisher) causeChain(walk *scheduler.LineageWalkResult, finding *BreachFinding) []*scheduler.JobExecutionSummary {
-	if finding == nil || len(finding.Leaves) == 0 {
+	if finding == nil || len(finding.Origins) == 0 {
 		return p.waitChain(walk)
 	}
 
 	chain := make([]*scheduler.JobExecutionSummary, 0, len(walk.Nodes))
 	seen := map[scheduler.JobRunKey]bool{}
-	for _, leaf := range finding.Leaves {
-		leafNode, ok := walk.NodesByKey[scheduler.NewJobRunKey(leaf.JobName, leaf.JobRun.ScheduledAt)]
+	for _, origin := range finding.Origins {
+		originNode, ok := walk.NodesByKey[scheduler.NewJobRunKey(origin.JobName, origin.JobRun.ScheduledAt)]
 		if !ok {
 			return p.waitChain(walk)
 		}
-		stack := []*scheduler.JobExecutionSummary{leafNode}
+		stack := []*scheduler.JobExecutionSummary{originNode}
 		for len(stack) > 0 {
 			node := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]

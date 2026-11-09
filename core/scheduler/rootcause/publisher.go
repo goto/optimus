@@ -53,8 +53,8 @@ type TargetEvaluation struct {
 	// HistoricalByJob holds the historical task+hook runtime baseline per job reachable
 	// from the target
 	HistoricalByJob map[scheduler.JobName]time.Duration
-	// Finding is the shared inferred-SLA breach analysis of the target; the gate below
-	// requires at least one breach origin before any reason is evaluated.
+	// Finding is the shared inferred-SLA breach analysis of the target; the caller gates
+	// on it (at least one breach origin) before calling Evaluate.
 	Finding       *BreachFinding
 	ReferenceTime time.Time
 	WalkOpts      scheduler.LineageWalkOptions
@@ -82,17 +82,8 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		return nil
 	}
 
-	// inferred-breach gate: potential-first — without at least one node breaching its
-	// inferred SLA there is nothing to explain, so no detection is raised or recorded
-	if ev.Finding == nil || len(ev.Finding.Origins) == 0 {
-		return nil
-	}
-	// an actual breach outranks a predicted one
-	breached := breachedSLA(targetRun, ev.ReferenceTime)
-	breachStatus := scheduler.BreachStatusPotential
-	if breached {
-		breachStatus = scheduler.BreachStatusActual
-	}
+	// the caller gates on the Finding: Evaluate expects at least one breach origin
+	// (potential-first) and reports no detection otherwise
 
 	impacted := []scheduler.ImpactedJob{{
 		ProjectName: ev.Target.Tenant.ProjectName(),
@@ -109,23 +100,19 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierSchedulerDelay(walk, impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
-	for i := range detections {
-		detections[i].BreachStatus = breachStatus
-	}
 
 	// if nothing explains the breach, the SLA is too aggressive for what the lineage
-	// delivers — but only when the target is past its SLA and is itself the only breach origin
-	// cause: a potential miss with no cause says nothing about the SLA yet, and a breach origin
-	// elsewhere would have been detected above
+	// delivers — but only when the target is past its SLA and is itself the only breach
+	// origin: a potential miss with no cause says nothing about the SLA yet, and an
+	// origin elsewhere would have been detected above
 	if len(detections) == 0 {
-		if !breached || len(ev.Finding.Origins) != 1 || ev.Finding.Origins[0].JobName != ev.Target.JobName {
+		if !breachedSLA(targetRun, ev.ReferenceTime) || len(ev.Finding.Origins) != 1 || ev.Finding.Origins[0].JobName != ev.Target.JobName {
 			return nil
 		}
 		return []scheduler.RootCauseDetection{{
 			IncidentKey:  incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
 			Reason:       scheduler.RootCauseReasonDetail{Reason: scheduler.TierAggressiveSLA, Status: scheduler.ReasonStatusActive},
 			ImpactedJobs: impacted,
-			BreachStatus: breachStatus,
 		}}
 	}
 	return detections

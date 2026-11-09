@@ -485,16 +485,12 @@ func (s *OptimusServer) setupHandlers() error {
 	newJobSLAPredictorService := schedulerService.NewJobSLAPredictorService(s.logger, s.conf.Alerting.PotentialSLABreachConfig, s.conf.Alerting.RootCause, slaRepository, jobLineageService, newDurationEstimatorService, jobProviderRepo, alertsHandler, tenantService, newJobRunService, operatorRunRepository, thirdPartyUpstreamTypes, jobRunRepo)
 
 	// Root-Cause Publisher Service: persists incidents and alerts the responsible teams.
-	// The inferred-SLA gate shares the potential-SLA API's damper and estimator settings;
-	// the runtime baseline uses its own (median-by-default) estimator.
+	// The inferred-SLA gate and the RUNTIME_DELAY baseline share one estimator — the
+	// potential-SLA API's settings — so both speak the same duration language.
 	slaBreachIncidentRepository := schedulerRepo.NewSLABreachIncidentRepository(s.dbPool)
-	rootCauseBaselineEstimator := schedulerService.NewDurationEstimatorService(s.logger, jobRunRepo,
-		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.LastNRuns, s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.Percentile,
-		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.PaddingPercentage, s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.MinPaddingMinutes,
-		s.conf.Alerting.RootCauseAlert.BaselineDurationConfig.MaxPaddingMinutes)
 	newJobRootCauseService := schedulerService.NewJobRootCauseService(s.logger, s.conf.Alerting.RootCauseAlert, s.conf.Alerting.PotentialSLABreachConfig,
 		jobProviderRepo, jobLineageService,
-		rootCauseBaselineEstimator, newDurationEstimatorService, jobRunRepo, newJobRunService,
+		newDurationEstimatorService, jobRunRepo, newJobRunService,
 		slaBreachIncidentRepository, thirdPartyUpstreamTypes, alertsHandler, tProjectService)
 
 	// Job Estimator Service

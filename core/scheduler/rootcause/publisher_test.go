@@ -378,9 +378,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 	})
 }
 
-// TestPublisher_InferredBreachGate covers the potential-first gate: without a breach origin
-// from the inferred-SLA analysis nothing is detected, and breach status follows the
-// target's own deadline.
+// TestPublisher_InferredBreachGate covers the potential-first contract: the caller gates
+// on the Finding, and an unexplained breach is AGGRESSIVE_SLA only when the target is its
+// own origin and past its SLA.
 func TestPublisher_InferredBreachGate(t *testing.T) {
 	publisher := testPublisher()
 	// reference is past the target's SLA (10:00 + 2h); the target started on its own
@@ -393,38 +393,23 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 		"job_target": 4 * time.Hour,
 	}
 
-	t.Run("no finding means no detection", func(t *testing.T) {
-		detections := publisher.Evaluate(rootcause.TargetEvaluation{
-			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
-		})
-		assert.Empty(t, detections)
-	})
-
-	t.Run("a finding without leaves means no detection", func(t *testing.T) {
-		detections := publisher.Evaluate(rootcause.TargetEvaluation{
-			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
-			Finding: &rootcause.BreachFinding{},
-		})
-		assert.Empty(t, detections)
-	})
-
-	t.Run("a target past its SLA is an actual breach", func(t *testing.T) {
+	t.Run("a target past its SLA with itself as the only origin is AGGRESSIVE_SLA", func(t *testing.T) {
 		detections := eval(target, historical, referenceTime)
 		if assert.Len(t, detections, 1) {
 			assert.Equal(t, scheduler.TierAggressiveSLA, detections[0].Reason.Reason)
-			assert.Equal(t, scheduler.BreachStatusActual, detections[0].BreachStatus)
 		}
 	})
 
-	t.Run("a target within its SLA with an upstream breach is potential", func(t *testing.T) {
+	t.Run("a target within its SLA with an upstream breach still detects reasons", func(t *testing.T) {
 		// the target is still within its SLA deadline (reference before 12:00)
 		withinSLA := testBaseTime.Add(time.Hour)
 		detections := eval(target, historical, withinSLA)
 		// no reason applies here (the target started on time and is within baseline), so
-		// a potential breach with no cause stays unrecorded
+		// a predicted miss with no cause stays unrecorded
 		assert.Empty(t, detections)
 
-		// with an upstream slow enough to detect, the same finding is a potential breach
+		// with an upstream slow enough to detect, the reason fires while the target is
+		// still within its SLA — the potential-first early warning
 		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
 			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
 		upstream := makeLineage("job_upstream", testTenant, upstreamRun)
@@ -433,7 +418,6 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 		detections = eval(targetWithUpstream, historical, withinSLA)
 		if assert.Len(t, detections, 1) {
 			assert.Equal(t, scheduler.TierRuntimeDelay, detections[0].Reason.Reason)
-			assert.Equal(t, scheduler.BreachStatusPotential, detections[0].BreachStatus)
 		}
 	})
 

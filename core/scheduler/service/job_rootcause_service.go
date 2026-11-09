@@ -247,6 +247,10 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 			continue
 		}
 		finding := finder.FindInferredBreaches(ctx, target, durationEstimates, startOffsets, sla, nil, damperFactor, reqConfig.ReferenceTime)
+		// potential-first gate: without a breach origin there is nothing to explain
+		if finding == nil || len(finding.Origins) == 0 {
+			continue
+		}
 		detections = append(detections, s.publisher.Evaluate(rootcause.TargetEvaluation{
 			Target:          target,
 			HistoricalByJob: historicalByJob,
@@ -407,7 +411,6 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 					Reason:               reason,
 					ImpactedJobs:         impactedJobNames(incident.Impacts),
 					Severity:             s.config.AlertSeverity,
-					BreachStatus:         incident.Incident.Details.BreachStatus,
 				}
 				return alert
 			}())

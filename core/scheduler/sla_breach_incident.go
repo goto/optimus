@@ -58,24 +58,8 @@ type RootCauseReasonDetail struct {
 	IsJobFinished bool `json:"is_job_finished,omitempty"`
 }
 
-// BreachStatus tells whether the incident's SLA miss has actually happened or is only
-// predicted by the potential-breach gate.
-type BreachStatus string
-
-const (
-	// BreachStatusActual means the target's SLA deadline has already passed.
-	BreachStatusActual BreachStatus = "actual"
-	// BreachStatusPotential means the deadline has not passed yet but the inferred-SLA
-	// prediction says the run is heading for a miss — there is still time to act.
-	BreachStatusPotential BreachStatus = "potential"
-)
-
 type RootCauseDetails struct {
 	Reasons []RootCauseReasonDetail `json:"reasons"`
-	// BreachStatus is potential while the predicted miss has not materialized and becomes
-	// actual once the target's deadline passes. Absent on rows written before the
-	// potential-breach gate existed.
-	BreachStatus BreachStatus `json:"breach_status,omitempty"`
 }
 
 // SLABreachIncidentKey identifies one offending job. It matches the unique constraint on
@@ -127,9 +111,6 @@ type RootCauseDetection struct {
 	IncidentKey  SLABreachIncidentKey
 	Reason       RootCauseReasonDetail
 	ImpactedJobs []ImpactedJob
-	// BreachStatus is potential when the target's deadline has not passed yet and the
-	// detection comes from the potential-breach prediction; actual once it has.
-	BreachStatus BreachStatus
 }
 
 // GroupDetections assembles the detections of one evaluation tick into incidents, one per
@@ -144,10 +125,6 @@ func GroupDetections(detections []RootCauseDetection) []*SLABreachIncidentWithIm
 		if !ok {
 			incident = &SLABreachIncident{Key: detection.IncidentKey}
 			byKey[detection.IncidentKey] = incident
-		}
-		// an actual breach outranks a predicted one when targets disagree
-		if detection.BreachStatus == BreachStatusActual || incident.Details.BreachStatus == "" {
-			incident.Details.BreachStatus = detection.BreachStatus
 		}
 
 		merged := false
@@ -243,17 +220,13 @@ func MergeResolvedReasons(fresh, previous *SLABreachIncident) *SLABreachIncident
 	merged := &SLABreachIncident{
 		ID:        fresh.ID,
 		Key:       fresh.Key,
-		Details:   RootCauseDetails{Reasons: append([]RootCauseReasonDetail(nil), fresh.Details.Reasons...), BreachStatus: fresh.Details.BreachStatus},
+		Details:   RootCauseDetails{Reasons: append([]RootCauseReasonDetail(nil), fresh.Details.Reasons...)},
 		CreatedAt: fresh.CreatedAt,
 		UpdatedAt: fresh.UpdatedAt,
 	}
 	if previous == nil {
 		merged.MaxInducedDelaySeconds = maxInducedDelaySeconds(merged.Details)
 		return merged
-	}
-	if merged.Details.BreachStatus == "" {
-		// the fresh observation did not classify the breach; keep the stored status
-		merged.Details.BreachStatus = previous.Details.BreachStatus
 	}
 
 	freshReasons := map[SLABreachTier]bool{}
@@ -291,13 +264,10 @@ type RootCauseBreachAlert struct {
 	Project          string
 	RootCauseProject string
 	RootCauseJob     string
-	// RootCauseScheduledAt is nil for SCHEDULER_DELAY alerts: they route to the platform
-	// team and deduplicate globally per reason, so no per-run identity is exposed.
+	// RootCauseScheduledAt is the offending run's schedule; THIRD_PARTY_DELAY incidents
+	// carry the daily sensor boundary instead, since sensors have no native run.
 	RootCauseScheduledAt *time.Time
 	Reason               RootCauseReasonDetail
 	ImpactedJobs         []string
 	Severity             string
-	// BreachStatus tells the recipient whether the SLA miss has already happened
-	// (actual) or is only predicted (potential) — the template renders it.
-	BreachStatus BreachStatus
 }

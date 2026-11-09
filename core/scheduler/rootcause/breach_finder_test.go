@@ -16,7 +16,7 @@ import (
 )
 
 // TestIdentifier_FindInferredBreaches covers the shared inferred-SLA breach analysis:
-// leaves, determinism and the early exits. It is the golden surface the root-cause
+// origins, determinism and the early exits. It is the golden surface the root-cause
 // engine builds on.
 func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	tnnt, err := tenant.NewTenant("project-a", "team-a")
@@ -52,30 +52,30 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	sla := scheduledAt.Add(30 * time.Minute)
 	skipNone := map[scheduler.JobName]bool{}
 
-	t.Run("returns the single leaf of a linear chain", func(t *testing.T) {
+	t.Run("returns the single breach origin of a linear chain", func(t *testing.T) {
 		// A -> B -> C; reference 25m after schedule breaches C's inferred SLA (+10m) and
-		// B's (+20m); A's own SLA (+30m) is not yet breached, so C is the only leaf.
+		// B's (+20m); A's own SLA (+30m) is not yet breached, so C is the only breach origin.
 		nodeC := node("job-C", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")})
 		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")}, nodeC)
 		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
-		assert.Len(t, finding.Leaves, 1)
-		assert.Equal(t, scheduler.JobName("job-C"), finding.Leaves[0].JobName)
+		assert.Len(t, finding.Origins, 1)
+		assert.Equal(t, scheduler.JobName("job-C"), finding.Origins[0].JobName)
 		// condition 2 (not started past the safe start) takes precedence over condition 1
 		// when both hold, matching the original single-run check order
-		assert.Equal(t, scheduler.SLABreachCauseNotStarted, finding.Leaves[0].Status)
-		if assert.Len(t, finding.LeafPaths, 1) && assert.Len(t, finding.LeafPaths[0], 3) {
-			assert.Equal(t, scheduler.JobName("job-A"), finding.LeafPaths[0][0].JobName)
-			assert.Equal(t, scheduler.JobName("job-B"), finding.LeafPaths[0][1].JobName)
-			assert.Equal(t, scheduler.JobName("job-C"), finding.LeafPaths[0][2].JobName)
+		assert.Equal(t, scheduler.SLABreachCauseNotStarted, finding.Origins[0].Status)
+		if assert.Len(t, finding.OriginPaths, 1) && assert.Len(t, finding.OriginPaths[0], 3) {
+			assert.Equal(t, scheduler.JobName("job-A"), finding.OriginPaths[0][0].JobName)
+			assert.Equal(t, scheduler.JobName("job-B"), finding.OriginPaths[0][1].JobName)
+			assert.Equal(t, scheduler.JobName("job-C"), finding.OriginPaths[0][2].JobName)
 		}
 		assert.Equal(t, scheduler.JobName("job-B"), finding.Bottleneck.Pred[scheduler.JobName("job-C")])
 		assert.NotNil(t, finding.SLAStates[scheduler.JobName("job-B")].InferredSLA)
 	})
 
-	t.Run("collapses a diamond to the shared leaf", func(t *testing.T) {
+	t.Run("collapses a diamond to the shared breach origin", func(t *testing.T) {
 		// A <- {B, C} <- D; only D breaches its inferred SLA.
 		shared := node("job-D", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-D": run("job-D")})
 		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")}, shared)
@@ -84,11 +84,11 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
-		assert.Len(t, finding.Leaves, 1)
-		assert.Equal(t, scheduler.JobName("job-D"), finding.Leaves[0].JobName)
+		assert.Len(t, finding.Origins, 1)
+		assert.Equal(t, scheduler.JobName("job-D"), finding.Origins[0].JobName)
 	})
 
-	t.Run("returns every independent leaf in sorted order across repeated runs", func(t *testing.T) {
+	t.Run("returns every independent breach origin in sorted order across repeated runs", func(t *testing.T) {
 		// A <- {B, C}; both breach their inferred SLA (+20m) at reference +25m.
 		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")})
 		nodeC := node("job-C", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")})
@@ -97,15 +97,15 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 		var firstOrder []scheduler.JobName
 		for range 20 {
 			finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
-			order := make([]scheduler.JobName, 0, len(finding.Leaves))
-			for _, leaf := range finding.Leaves {
-				order = append(order, leaf.JobName)
+			order := make([]scheduler.JobName, 0, len(finding.Origins))
+			for _, origin := range finding.Origins {
+				order = append(order, origin.JobName)
 			}
 			if firstOrder == nil {
 				firstOrder = order
 				assert.Equal(t, []scheduler.JobName{"job-B", "job-C"}, order)
 			}
-			assert.Equal(t, firstOrder, order, "leaf order must be deterministic across runs")
+			assert.Equal(t, firstOrder, order, "breach origin order must be deterministic across runs")
 		}
 	})
 
@@ -119,7 +119,7 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
-		assert.Empty(t, finding.Leaves)
+		assert.Empty(t, finding.Origins)
 		assert.Empty(t, finding.BreachStates)
 	})
 
@@ -129,16 +129,16 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB, disabled)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
-		assert.Len(t, finding.Leaves, 1)
-		assert.Equal(t, scheduler.JobName("job-B"), finding.Leaves[0].JobName)
+		assert.Len(t, finding.Origins, 1)
+		assert.Equal(t, scheduler.JobName("job-B"), finding.Origins[0].JobName)
 
 		skipB := map[scheduler.JobName]bool{"job-B": true}
 		finding = identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipB, damper, scheduledAt.Add(25*time.Minute))
 		// with B skipped and C disabled, the target itself is the only breaching job left:
 		// it has not started past its safe start (inferred SLA -30m -10m ... i.e. +20m)
-		if assert.Len(t, finding.Leaves, 1) {
-			assert.Equal(t, scheduler.JobName("job-A"), finding.Leaves[0].JobName)
-			assert.Equal(t, scheduler.SLABreachCauseNotStarted, finding.Leaves[0].Status)
+		if assert.Len(t, finding.Origins, 1) {
+			assert.Equal(t, scheduler.JobName("job-A"), finding.Origins[0].JobName)
+			assert.Equal(t, scheduler.SLABreachCauseNotStarted, finding.Origins[0].Status)
 		}
 	})
 
@@ -147,6 +147,6 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, nil, skipNone, damper, scheduledAt.Add(25*time.Minute))
-		assert.Empty(t, finding.Leaves)
+		assert.Empty(t, finding.Origins)
 	})
 }

@@ -135,9 +135,9 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
 	})
 
-	t.Run("started late and running long on the same leaf keeps the larger delay", func(t *testing.T) {
+	t.Run("started late and running long on the same breach origin keeps the larger delay", func(t *testing.T) {
 		// job-A started 15m after its safe start (10:20) and has already overrun its 10m
-		// estimate by 8m at 10:40. job-B finished by 10:20 so it is not an SLA leaf, but
+		// estimate by 8m at 10:40. job-B finished by 10:20 so it is not an SLA breach origin, but
 		// escalate still scores it as RUNNING_LONG (15m overrun vs 5m estimate) which beats
 		// both of job-A's own delays.
 		upstreamRun := &scheduler.JobRunSummary{

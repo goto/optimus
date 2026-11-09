@@ -22,19 +22,19 @@ type BreachFinding struct {
 	// BreachStates maps every breaching job to its state; Status is
 	// SLABreachCauseRunningLate or SLABreachCauseNotStarted.
 	BreachStates map[scheduler.JobName]*scheduler.JobState
-	// Leaves are the breaching jobs with no breaching direct upstream — the graph-rule
+	// Origins are the breaching jobs with no breaching direct upstream — the graph-rule
 	// root causes — sorted by job name for deterministic results.
-	Leaves []*scheduler.JobState
-	// LeafPaths holds, parallel to Leaves, the target-to-leaf path via the bottleneck
+	Origins []*scheduler.JobState
+	// OriginPaths holds, parallel to Origins, the target-to-origin path via the bottleneck
 	// chain; entries are nil when no path could be reconstructed.
-	LeafPaths [][]*scheduler.JobState
+	OriginPaths [][]*scheduler.JobState
 	// NodeByName indexes the lineage nodes visited during the search.
 	NodeByName map[scheduler.JobName]*scheduler.JobLineageSummary
 }
 
 // FindInferredBreaches computes the inferred SLAs for a target's lineage, flags every
-// breaching job and derives the leaf causes. It does not classify reasons; the caller
-// decides what to do with the leaves. An empty Leaves slice means nothing is breaching.
+// breaching job and derives the breach origins. It does not classify reasons; the caller
+// decides what to do with the origins. An empty Origins slice means nothing is breaching.
 func (i *Identifier) FindInferredBreaches(
 	ctx context.Context,
 	jobTarget *scheduler.JobLineageSummary,
@@ -71,26 +71,26 @@ func (i *Identifier) FindInferredBreaches(
 	inferredSLAs, bottleneck := i.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
 	slaStates := populateJobSLAStates(jobDurations, startOffsets, inferredSLAs)
 	breachStates, nodeByName := i.findBreachStates(ctx, jobTarget, slaStates, bottleneck, skipJobNames, referenceTime)
-	leaves, leafPaths := leafCauses(jobTarget.JobName, bottleneck, slaStates, breachStates, nodeByName)
+	origins, originPaths := breachOrigins(jobTarget.JobName, bottleneck, slaStates, breachStates, nodeByName)
 
 	finding.InferredSLAs = inferredSLAs
 	finding.Bottleneck = bottleneck
 	finding.SLAStates = slaStates
 	finding.BreachStates = breachStates
-	finding.Leaves = leaves
-	finding.LeafPaths = leafPaths
+	finding.Origins = origins
+	finding.OriginPaths = originPaths
 	finding.NodeByName = nodeByName
 	return finding
 }
 
-// leafCauses returns the breaching jobs with no breaching direct upstream — the graph-rule
-// root causes — sorted by job name so repeated runs produce identical results. Each leaf
-// comes with its target-to-leaf path via the bottleneck chain when one can be reconstructed.
-func leafCauses(targetName scheduler.JobName, bottleneck BottleneckPath, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState,
+// breachOrigins returns the breaching jobs with no breaching direct upstream — the graph-rule
+// root causes — sorted by job name so repeated runs produce identical results. Each breach origin
+// comes with its target-to-origin path via the bottleneck chain when one can be reconstructed.
+func breachOrigins(targetName scheduler.JobName, bottleneck BottleneckPath, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState,
 	breachStates map[scheduler.JobName]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary,
 ) ([]*scheduler.JobState, [][]*scheduler.JobState) {
-	leaves := make([]*scheduler.JobState, 0, len(breachStates))
-	leafPaths := make([][]*scheduler.JobState, 0, len(breachStates))
+	origins := make([]*scheduler.JobState, 0, len(breachStates))
+	originPaths := make([][]*scheduler.JobState, 0, len(breachStates))
 
 	names := make([]scheduler.JobName, 0, len(breachStates))
 	for jobName := range breachStates {
@@ -115,9 +115,9 @@ func leafCauses(targetName scheduler.JobName, bottleneck BottleneckPath, jobSLAS
 		if hasBreachingUpstream {
 			continue
 		}
-		leaves = append(leaves, breachState)
+		origins = append(origins, breachState)
 		path := reconstructStatePath(targetName, jobName, bottleneck, jobSLAStates, breachStates, nodeByName)
-		leafPaths = append(leafPaths, path)
+		originPaths = append(originPaths, path)
 	}
-	return leaves, leafPaths
+	return origins, originPaths
 }

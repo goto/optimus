@@ -382,9 +382,10 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 		notifier.AssertNotCalled(t, "SendRootCauseBreach")
 	})
 
-	t.Run("routes scheduler delay to the configured platform team without per-run identity", func(t *testing.T) {
-		// a2 finished 09:15; b1 was scheduled 09:00 but only started 10:40 — a scheduler-
-		// attributable wait far above the 2.5m level-1 budget
+	t.Run("routes scheduler delay to the configured platform team", func(t *testing.T) {
+		// a2 finished 09:15; b1 was scheduled 09:00 but only started 10:40 (85m the
+		// scheduler owns); the target started before its own schedule, so the summed
+		// wait is 85m against a 3-level budget of 7.5m, keyed on the target's run
 		a2Run := rcMakeRun("job_a2", base.Add(-2*time.Hour),
 			1*time.Hour, rcPtr(base.Add(-2*time.Hour)), rcPtr(base.Add(-45*time.Minute)), "success")
 		b1Run := rcMakeRun("job_b1", base.Add(-time.Hour),
@@ -418,9 +419,9 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
 			assert.Equal(t, "platform-team", alert.Team)
 			assert.Equal(t, scheduler.TierSchedulerDelay, alert.Reason.Reason)
-			// the per-run identity is dropped so the alert deduplicates globally per reason
-			assert.Empty(t, alert.RootCauseJob)
-			assert.Nil(t, alert.RootCauseScheduledAt)
+			// the incident is keyed on the target's run, so the dedup keys apply normally
+			assert.Equal(t, "job_target", alert.RootCauseJob)
+			assert.NotNil(t, alert.RootCauseScheduledAt)
 		})
 
 		svc := newService(detailsGetter, lineageFetcher, estimator, repo, notifier, &mockProjectTeamGetter{}, &config.RootCauseAlertConfig{

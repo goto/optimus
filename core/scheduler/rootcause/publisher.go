@@ -395,66 +395,92 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 // thirdPartyDailyBoundary was moved to ThirdPartyDailyBoundary so the identifier and the
 // publisher measure sensor waits against the same daily window.
 
-// tierSchedulerDelay attributes the scheduler itself for started nodes in the walk whose
-// system scheduling delay exceeds the per-level budget, and whose upstreams all succeeded —
-// a wait caused by a failed upstream is FAILED_UPSTREAM's finding, not the scheduler's.
-// The whole walk is scanned (like FAILED_UPSTREAM and WAITING_UPSTREAM): scheduler delay
-// shows up on the propagation path downstream of the leaf cause as much as on its
-// ancestry, and the gating path alone never sees in-flight frontier nodes.
+// tierSchedulerDelay attributes the scheduler for the total scheduling wait accumulated
+// along the target's critical path: the finished gating path plus any started-but-running
+// node hanging off its end (its delay is exact once the task has started). The budget
+// scales with the measured path depth, so a healthy deep lineage stays silent. Nodes that
+// have not started yet are skipped — their final delay is still unknown (stated
+// limitation). The incident is keyed on the target's run, so the alert keeps the target
+// identity and the alert_logs deduplication applies like any other reason.
 //
 // The delay is computed here (not read from DelaySummary, which only GenerateLineage-
-// ExecutionSummary fills) with the same formula the summary uses: the wait from the later
-// of the node's schedule and its latest-finished upstream's end until the task start.
+// ExecutionSummary fills for finished gating paths) with the same formula the summary
+// uses: the wait from the later of the node's schedule and its latest-finished upstream's
+// end until the task start.
 func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
-	var detections []scheduler.RootCauseDetection
-	for _, node := range walk.Nodes {
-		// the target itself has no gating upstream, so its wait is indistinguishable from
-		// ordinary queueing; only lineage nodes carry the scheduler-delay signal
-		if node.Level == 0 || node.JobRunSummary.TaskStartTime == nil {
-			continue
-		}
-		if !upstreamsAllSuccess(walk, node) {
-			continue
-		}
-
-		delay := node.JobRunSummary.TaskStartTime.Sub(node.JobRunSummary.ScheduledAt)
-		if upstream := latestFinishedUpstream(walk, node); upstream != nil {
-			if upstreamEnd := upstream.JobRunSummary.GetActualEndTime(); upstreamEnd.After(node.JobRunSummary.ScheduledAt) {
-				delay = node.JobRunSummary.TaskStartTime.Sub(*upstreamEnd)
-			}
-		}
-		if delay < 0 {
-			delay = 0
-		}
-		if budget := p.schedulerDelayBudget(node.Level); int64(delay.Seconds()) <= budget {
-			continue
-		}
-		detections = append(detections, scheduler.RootCauseDetection{
-			IncidentKey: nodeIncidentKey(node),
-			Reason: scheduler.RootCauseReasonDetail{
-				Reason:              scheduler.TierSchedulerDelay,
-				Status:              scheduler.ReasonStatusActive,
-				InducedDelaySeconds: int(delay.Seconds()),
-				IsJobFinished:       node.JobRunSummary.IsFinished(),
-			},
-			ImpactedJobs: impacted,
-		})
+	gatingPath := walk.GatingPath()
+	if len(gatingPath) == 0 {
+		return nil
 	}
-	return detections
-}
 
-func (p *Publisher) schedulerDelayBudget(level int) int64 {
-	return int64(p.config.SchedulerDelayPerDepth.Seconds() * float64(level))
-}
-
-func upstreamsAllSuccess(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) bool {
-	for _, upstreamKey := range walk.UpstreamsByKey[node.Key()] {
+	// the measured chain: started nodes of the critical path, plus started running heads
+	// directly upstream of its end
+	measured := make([]*scheduler.JobExecutionSummary, 0, len(gatingPath)+1)
+	for _, node := range gatingPath {
+		if node.JobRunSummary.TaskStartTime != nil {
+			measured = append(measured, node)
+		}
+	}
+	pathEnd := gatingPath[len(gatingPath)-1]
+	for _, upstreamKey := range walk.UpstreamsByKey[pathEnd.Key()] {
 		upstream, ok := walk.NodesByKey[upstreamKey]
-		if !ok || upstream.State != scheduler.StateSuccess {
-			return false
+		if ok && !upstream.JobRunSummary.IsFinished() && upstream.JobRunSummary.TaskStartTime != nil {
+			measured = append(measured, upstream)
 		}
 	}
-	return true
+	if len(measured) == 0 {
+		return nil
+	}
+
+	var total time.Duration
+	for _, node := range measured {
+		total += nodeSchedulingDelay(walk, node)
+	}
+	if budget := time.Duration(p.schedulerDelayBudget(len(measured))) * time.Second; total <= budget {
+		return nil
+	}
+
+	targetNode := walk.Nodes[0]
+	return []scheduler.RootCauseDetection{{
+		IncidentKey: incidentKey(targetNode.ProjectName, targetNode.JobName, targetNode.JobRunSummary.ScheduledAt),
+		Reason: scheduler.RootCauseReasonDetail{
+			Reason:              scheduler.TierSchedulerDelay,
+			Status:              scheduler.ReasonStatusActive,
+			InducedDelaySeconds: int(total.Seconds()),
+			IsJobFinished:       targetNode.JobRunSummary.IsFinished(),
+		},
+		ImpactedJobs: impacted,
+	}}
+}
+
+// nodeSchedulingDelay is one node's scheduler-owned wait: from the later of its own
+// schedule and its latest-finished upstream's end until the task started. A node with no
+// finished upstream contributes nothing — a wait with no completed dependency behind it
+// belongs to the missing upstream, not the scheduler; the same holds for a wait behind a
+// failed upstream, whose end time precedes the wait and clamps the delay to zero.
+func nodeSchedulingDelay(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) time.Duration {
+	run := node.JobRunSummary
+	if run.TaskStartTime == nil {
+		return 0
+	}
+	upstream := latestFinishedUpstream(walk, node)
+	if upstream == nil {
+		return 0
+	}
+	delay := run.TaskStartTime.Sub(run.ScheduledAt)
+	if upstreamEnd := upstream.JobRunSummary.GetActualEndTime(); upstreamEnd.After(run.ScheduledAt) {
+		delay = run.TaskStartTime.Sub(*upstreamEnd)
+	}
+	if delay < 0 {
+		return 0
+	}
+	return delay
+}
+
+// schedulerDelayBudget is the total scheduling wait a measured path of the given depth
+// may accumulate before SCHEDULER_DELAY is recorded.
+func (p *Publisher) schedulerDelayBudget(depth int) int64 {
+	return int64(p.config.SchedulerDelayPerDepth.Seconds() * float64(depth))
 }
 
 // tierRuntimeDelay measures induced delay — observed task/hook runtime minus the historical

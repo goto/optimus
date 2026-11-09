@@ -185,9 +185,10 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, 2700, projectDetection.Reason.InducedDelaySeconds) // 45m project total
 	})
 
-	t.Run("tier 2: scheduler-attributable wait beyond the per-level budget", func(t *testing.T) {
-		// a2 finished at 09:15; b1 was scheduled 09:00 but only started 10:40 — a wait the
-		// scheduler owns (85m), far above the 2.5m level-1 budget
+	t.Run("scheduler delay is the critical path's summed wait against the depth budget", func(t *testing.T) {
+		// a2 finished at 09:15; b1 was scheduled 09:00 but only started 10:40 (85m the
+		// scheduler owns); the target itself started 15m after b1's finish. The summed
+		// wait is 100m against a 3-level budget of 7.5m, keyed on the target's run.
 		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
 			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-45*time.Minute)), "success")
 		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour),
@@ -208,20 +209,23 @@ func TestPublisher_Evaluate(t *testing.T) {
 
 		matched := detectionsByReason(detections, scheduler.TierSchedulerDelay)
 		assert.Len(t, matched, 1)
-		assert.Equal(t, "job_b1", matched[0].IncidentKey.JobName.String())
-		// 10:40 - max(09:00, 09:15) = 85 minutes
-		assert.Equal(t, int(85*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+		assert.Equal(t, "job_target", matched[0].IncidentKey.JobName.String())
+		// (11:00 - 10:45) + (10:40 - 09:15) = 15m + 85m = 100 minutes
+		assert.Equal(t, int(100*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+		assert.False(t, matched[0].Reason.IsJobFinished, "the target is still running")
 	})
 
-	t.Run("tier 2 skipped when the gating upstream failed; tier 4 fires instead", func(t *testing.T) {
-		// a2 failed at 08:10; b1 started anyway 20 minutes later — its wait is not charged
-		// to the scheduler, and the failed upstream is the reported cause
+	t.Run("no scheduler charge behind a failed upstream; tier 4 fires instead", func(t *testing.T) {
+		// a2 failed at 08:10; b1 started anyway at 08:30 — a wait the formula does not
+		// charge to the scheduler (the upstream's end precedes the wait). The target
+		// starts on its own schedule, so nothing on the path is scheduler-attributable;
+		// the failed upstream is the reported cause.
 		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
 			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-110*time.Minute)), "failed")
 		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour),
 			ptr(testBaseTime.Add(-90*time.Minute)), ptr(testBaseTime.Add(-80*time.Minute)), "success")
 		targetRun := makeRun("job_target", testBaseTime,
-			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+			ptr(testBaseTime), nil, "running")
 		target := makeLineage("job_target", testTenant, targetRun,
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
@@ -379,10 +383,11 @@ func TestPublisher_Evaluate(t *testing.T) {
 // target's own deadline.
 func TestPublisher_InferredBreachGate(t *testing.T) {
 	publisher := testPublisher()
-	// reference is past the target's SLA (10:00 + 2h)
+	// reference is past the target's SLA (10:00 + 2h); the target started on its own
+	// schedule so its wait charges nothing to the scheduler
 	referenceTime := testBaseTime.Add(3 * time.Hour)
 	targetRun := makeRun("job_target", testBaseTime,
-		ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		ptr(testBaseTime), nil, "running")
 	target := makeLineage("job_target", testTenant, targetRun)
 	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
 		"job_target": {TaskDuration: 4 * time.Hour},
@@ -590,10 +595,11 @@ func TestPublisher_CauseChain(t *testing.T) {
 		assert.Equal(t, "job_a2", runtime[0].IncidentKey.JobName.String())
 	})
 
-	t.Run("a started running leaf is measured against the scheduler budget", func(t *testing.T) {
+	t.Run("a started running head is summed into the scheduler total", func(t *testing.T) {
 		// b1 scheduled 09:00 but only started 10:40 (85m past its latest-finished upstream's
-		// 09:15 end), still running: the gating path would stop at the target and never
-		// measure it, the walk scan does
+		// 09:15 end), still running: it hangs off the gating path's end and its delay is
+		// exact, so it is summed into the total keyed on the target's run. The target
+		// itself contributes nothing (its only upstream has not finished).
 		startedB1 := makeRun("job_b1", testBaseTime.Add(-time.Hour),
 			ptr(testBaseTime.Add(40*time.Minute)), nil, "running")
 		startedTarget := makeLineage("job_target", testTenant, targetRun,
@@ -612,7 +618,7 @@ func TestPublisher_CauseChain(t *testing.T) {
 
 		schedulerDetections := detectionsByReason(detections, scheduler.TierSchedulerDelay)
 		if assert.Len(t, schedulerDetections, 1) {
-			assert.Equal(t, "job_b1", schedulerDetections[0].IncidentKey.JobName.String())
+			assert.Equal(t, "job_target", schedulerDetections[0].IncidentKey.JobName.String())
 			assert.Equal(t, int(85*time.Minute/time.Second), schedulerDetections[0].Reason.InducedDelaySeconds)
 			assert.False(t, schedulerDetections[0].Reason.IsJobFinished)
 		}

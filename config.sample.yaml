@@ -122,8 +122,10 @@ alerting:
     # RuntimeDelayThresholdMinutes is the induced-delay floor for RUNTIME_DELAY, both for
     # an individual job and for a project's flat sum along the bottleneck path.
     runtime_delay_threshold_minutes: 30
-    # SchedulerDelayMinutesPerDepth is the per-lineage-level scheduler delay budget; a node
-    # whose system scheduling delay exceeds this times its level flags SCHEDULER_DELAY.
+    # SchedulerDelayMinutesPerDepth is the scheduler delay budget per path level: the summed
+    # scheduling wait along the target's critical path may reach this many minutes per
+    # measured path level before SCHEDULER_DELAY is recorded. Alerting additionally
+    # respects alert_suppression.min_total_induced_delay_minutes.
     scheduler_delay_minutes_per_depth: 2.5
     # ThirdPartyDelayStartHourUTC is the UTC hour (0-23) anchoring the daily sensor-incident
     # boundary: sensor waits are measured and grouped from the most recent occurrence of this

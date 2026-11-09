@@ -460,12 +460,6 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 					Severity:             s.config.AlertSeverity,
 					BreachStatus:         incident.Incident.Details.BreachStatus,
 				}
-				// scheduler-attributed alerts drop the per-run identity so the alert_logs
-				// deduplication collapses every backed-up run into one platform alert
-				if reason.Reason == scheduler.TierSchedulerDelay {
-					alert.RootCauseJob = ""
-					alert.RootCauseScheduledAt = nil
-				}
 				return alert
 			}())
 		}

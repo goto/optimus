@@ -96,7 +96,7 @@ func permissiveFinding(target *scheduler.JobLineageSummary) *rootcause.BreachFin
 	}
 }
 
-func eval(target *scheduler.JobLineageSummary, historical map[scheduler.JobName]scheduler.JobHistoricalDuration, referenceTime time.Time) []scheduler.RootCauseDetection {
+func eval(target *scheduler.JobLineageSummary, historical map[scheduler.JobName]time.Duration, referenceTime time.Time) []scheduler.RootCauseDetection {
 	return testPublisher().Evaluate(rootcause.TargetEvaluation{
 		Target:          target,
 		ReferenceTime:   referenceTime,
@@ -111,7 +111,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 	referenceTime := testBaseTime.Add(3 * time.Hour)
 
 	// a target whose own runtime matches its historical baseline so it induces nothing
-	targetBaseline := scheduler.JobHistoricalDuration{TaskDuration: 2 * time.Hour, HookDuration: time.Hour}
+	targetBaseline := 2*time.Hour + time.Hour
 
 	t.Run("returns nothing when the target did not breach its SLA", func(t *testing.T) {
 		// target finished at 11:00, within its 12:00 deadline
@@ -131,8 +131,8 @@ func TestPublisher_Evaluate(t *testing.T) {
 		target := makeLineage("job_target", testTenant, targetRun,
 			makeLineage("job_upstream", testTenant, upstreamRun))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_upstream": {TaskDuration: 10 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_upstream": 10 * time.Minute,
 			"job_target":   targetBaseline,
 		}
 
@@ -164,7 +164,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 				makeLineage("job_a2", tenantProjA, a2Run,
 					makeLineage("job_b1", tenantProjB, b1Run))))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
+		historical := map[scheduler.JobName]time.Duration{
 			"job_target": targetBaseline,
 		}
 
@@ -199,10 +199,10 @@ func TestPublisher_Evaluate(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 90 * time.Minute},
-			"job_b1":     {TaskDuration: 5 * time.Minute},
-			"job_a2":     {TaskDuration: 75 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+			"job_b1":     5 * time.Minute,
+			"job_a2":     75 * time.Minute,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -230,9 +230,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 90 * time.Minute},
-			"job_b1":     {TaskDuration: 10 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+			"job_b1":     10 * time.Minute,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -281,8 +281,8 @@ func TestPublisher_Evaluate(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 90 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
 		}
 
 		finding := permissiveFinding(target)
@@ -315,9 +315,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 90 * time.Minute},
-			"job_a2":     {TaskDuration: 30 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+			"job_a2":     30 * time.Minute,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -337,8 +337,8 @@ func TestPublisher_Evaluate(t *testing.T) {
 			ptr(testBaseTime), nil, "running")
 		target := makeLineage("job_target", testTenant, targetRun)
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 4 * time.Hour},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 4 * time.Hour,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -364,9 +364,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 			makeLineage("job_b1", tenantProjB, b1Run,
 				makeLineage("job_a2", tenantProjA, a2Run)))
 
-		historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-			"job_target": {TaskDuration: 90 * time.Minute},
-			"job_a2":     {TaskDuration: 30 * time.Minute},
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+			"job_a2":     30 * time.Minute,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -389,8 +389,8 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 	targetRun := makeRun("job_target", testBaseTime,
 		ptr(testBaseTime), nil, "running")
 	target := makeLineage("job_target", testTenant, targetRun)
-	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-		"job_target": {TaskDuration: 4 * time.Hour},
+	historical := map[scheduler.JobName]time.Duration{
+		"job_target": 4 * time.Hour,
 	}
 
 	t.Run("no finding means no detection", func(t *testing.T) {
@@ -429,7 +429,7 @@ func TestPublisher_InferredBreachGate(t *testing.T) {
 			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
 		upstream := makeLineage("job_upstream", testTenant, upstreamRun)
 		targetWithUpstream := makeLineage("job_target", testTenant, targetRun, upstream)
-		historical["job_upstream"] = scheduler.JobHistoricalDuration{TaskDuration: 10 * time.Minute}
+		historical["job_upstream"] = 10 * time.Minute
 		detections = eval(targetWithUpstream, historical, withinSLA)
 		if assert.Len(t, detections, 1) {
 			assert.Equal(t, scheduler.TierRuntimeDelay, detections[0].Reason.Reason)
@@ -470,8 +470,8 @@ func TestPublisher_WaitingUpstreamSafeStart(t *testing.T) {
 				makeLineage("job_a2", tenantProjA, a2Run)))
 		return target, b1Run
 	}
-	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-		"job_target": {TaskDuration: 90 * time.Minute},
+	historical := map[scheduler.JobName]time.Duration{
+		"job_target": 90 * time.Minute,
 	}
 
 	t.Run("a stuck node past its latest safe start is detected", func(t *testing.T) {
@@ -544,10 +544,10 @@ func TestPublisher_CauseChain(t *testing.T) {
 			makeLineage("job_a2", tenantProjA, a2Run,
 				makeLineage("job_c1", tenantProjB, c1Run))))
 
-	historical := map[scheduler.JobName]scheduler.JobHistoricalDuration{
-		"job_target": {TaskDuration: 90 * time.Minute},
-		"job_a2":     {TaskDuration: 30 * time.Minute},
-		"job_c1":     {TaskDuration: 2 * time.Hour},
+	historical := map[scheduler.JobName]time.Duration{
+		"job_target": 90 * time.Minute,
+		"job_a2":     30 * time.Minute,
+		"job_c1":     2 * time.Hour,
 	}
 	// the breach origin is a2, the finished job whose runtime blew past its baseline
 	finding := &rootcause.BreachFinding{

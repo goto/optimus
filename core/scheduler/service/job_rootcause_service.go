@@ -208,7 +208,7 @@ func (s *JobRootCauseService) evaluateBatch(ctx context.Context, jobSchedules ma
 	}
 
 	uniqueJobNames := collectJobNames(jobsWithLineageMap)
-	historicalByJob, err := s.fetchBaselineDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames, jobsWithLineageMap)
+	historicalByJob, err := s.fetchBaselineDurations(ctx, reqConfig.ReferenceTime, uniqueJobNames)
 	if err != nil {
 		return nil, err
 	}
@@ -261,62 +261,21 @@ func (s *JobRootCauseService) damperFactor() scheduler.DamperFactor {
 	return scheduler.DamperFactor{Alpha: s.potentialConfig.DamperCoeff}
 }
 
-// fetchBaselineDurations builds the per-job historical task/hook baseline the RUNTIME_DELAY
-// induced-delay math compares against. Jobs without history evaluate against a zero baseline.
-func (s *JobRootCauseService) fetchBaselineDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName, jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) (map[scheduler.JobName]scheduler.JobHistoricalDuration, error) {
-	historical := make(map[scheduler.JobName]scheduler.JobHistoricalDuration, len(jobNames))
-
-	taskDurations, err := s.baselineEstimator.GetPercentileDurationByJobNamesByTask(ctx, referenceTime, jobNames)
+// fetchBaselineDurations builds the per-job historical task+hook runtime baseline the
+// RUNTIME_DELAY induced-delay math compares against. Jobs without history evaluate
+// against a zero baseline.
+func (s *JobRootCauseService) fetchBaselineDurations(ctx context.Context, referenceTime time.Time, jobNames []scheduler.JobName) (map[scheduler.JobName]time.Duration, error) {
+	estimates, err := s.baselineEstimator.GetPercentileDurationByJobNames(ctx, referenceTime, jobNames)
 	if err != nil {
 		return nil, err
 	}
+	historical := make(map[scheduler.JobName]time.Duration, len(jobNames))
 	for _, jobName := range jobNames {
-		if duration := taskDurations[jobName]; duration != nil {
-			historical[jobName] = scheduler.JobHistoricalDuration{TaskDuration: *duration}
-		}
-	}
-
-	hookNames := collectHookNames(jobsWithLineage)
-	if len(hookNames) == 0 {
-		return historical, nil
-	}
-	hookDurations, err := s.baselineEstimator.GetPercentileDurationByJobNamesByHookName(ctx, referenceTime, jobNames, hookNames)
-	if err != nil {
-		return nil, err
-	}
-	for _, jobName := range jobNames {
-		if duration := hookDurations[jobName]; duration != nil {
-			entry := historical[jobName]
-			entry.HookDuration = *duration
-			historical[jobName] = entry
+		if duration := estimates[jobName]; duration != nil {
+			historical[jobName] = *duration
 		}
 	}
 	return historical, nil
-}
-
-// collectHookNames gathers every distinct hook name in the lineages so the hook baseline
-// can be fetched in one batch.
-func collectHookNames(jobsWithLineage map[scheduler.JobName]*scheduler.JobLineageSummary) []string {
-	seen := map[string]bool{}
-	stack := []*scheduler.JobLineageSummary{}
-	for _, lineage := range jobsWithLineage {
-		stack = append(stack, lineage)
-	}
-	for len(stack) > 0 {
-		lineage := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		for _, run := range lineage.JobRuns {
-			if run.HookName != nil && !seen[*run.HookName] {
-				seen[*run.HookName] = true
-			}
-		}
-		stack = append(stack, lineage.Upstreams...)
-	}
-	hookNames := make([]string, 0, len(seen))
-	for hookName := range seen {
-		hookNames = append(hookNames, hookName)
-	}
-	return hookNames
 }
 
 // activeIncidentScanWindow is how far back the resolution pass looks for incidents that

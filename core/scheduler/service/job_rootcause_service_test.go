@@ -247,11 +247,9 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			duration := duration
 			durationsByJob[scheduler.JobName(jobName)] = &duration
 		}
-		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Once()
 		// the same estimator doubles as the SLA duration estimator in these fixtures
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Once()
+			Return(durationsByJob, nil).Times(2)
 		return estimator
 	}
 
@@ -635,10 +633,8 @@ func TestJobRootCauseService_IdentifySLABreachRootCause(t *testing.T) {
 			duration := duration
 			durationsByJob[scheduler.JobName(jobName)] = &duration
 		}
-		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Times(3)
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Times(3)
+			Return(durationsByJob, nil).Times(6)
 
 		repo := &mockIncidentRepository{}
 		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Times(3)
@@ -722,10 +718,8 @@ func TestJobRootCauseService_AlertSuppression(t *testing.T) {
 			duration := duration
 			durationsByJob[scheduler.JobName(jobName)] = &duration
 		}
-		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Once()
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(durationsByJob, nil).Once()
+			Return(durationsByJob, nil).Times(2)
 		return detailsGetter, lineageFetcher, estimator
 	}
 
@@ -936,8 +930,7 @@ func TestJobRootCauseService_AggressiveSLAAlertSuppression(t *testing.T) {
 		estimator := &mockRootCauseDurationEstimator{}
 		durPtr := func(d time.Duration) *time.Duration { return &d }
 		durations := map[scheduler.JobName]*time.Duration{"job_target": durPtr(150 * time.Minute)}
-		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).Return(durations, nil).Once()
-		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).Return(durations, nil).Once()
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).Return(durations, nil).Times(2)
 
 		repo := &mockIncidentRepository{}
 		repo.On("GetIncidentByKey", ctx, mock.Anything).Return(nil, scheduler.ErrSLABreachIncidentNotFound).Once()
@@ -1041,10 +1034,8 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": healthyLineage}, nil).Once()
 
 		estimator := &mockRootCauseDurationEstimator{}
-		estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
-			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
-			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
+			Return(map[scheduler.JobName]*time.Duration{}, nil).Times(2)
 
 		// an incident that was active before this tick, with a stale blast radius
 		offenderKey := scheduler.SLABreachIncidentKey{
@@ -1153,16 +1144,11 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 	lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
 		Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": lineage}, nil)
 	estimator := &mockRootCauseDurationEstimator{}
-	estimator.On("GetPercentileDurationByJobNamesByTask", ctx, referenceTime, mock.Anything).
-		Return(map[scheduler.JobName]*time.Duration{
-			"job_target":   rcDurPtr(150 * time.Minute),
-			"job_upstream": rcDurPtr(64 * time.Minute),
-		}, nil)
 	estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
 		Return(map[scheduler.JobName]*time.Duration{
 			"job_target":   rcDurPtr(150 * time.Minute),
 			"job_upstream": rcDurPtr(64 * time.Minute),
-		}, nil)
+		}, nil).Times(4)
 
 	newRepo := func(previous *scheduler.SLABreachIncident) *mockIncidentRepository {
 		repo := &mockIncidentRepository{}

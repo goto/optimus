@@ -47,6 +47,39 @@ func TestFromRootCauseRequest(t *testing.T) {
 
 		assert.Error(t, err)
 	})
+
+	t.Run("adapts the request's damper factor with the default method", func(t *testing.T) {
+		req := &pb.IdentifySLABreachRootCauseRequest{
+			ProjectNames: []string{"p_root"},
+			DamperFactor: &pb.DamperFactor{BaseValue: 1.5, Alpha: 0.8, MinValue: 0.5},
+		}
+
+		reqConfig, err := fromRootCauseRequest(req)
+
+		assert.NoError(t, err)
+		// proto floats are float32; compare with the converted precision
+		assert.Equal(t, float64(float32(1.5)), reqConfig.DamperFactor.BaseValue)
+		assert.InEpsilon(t, 0.8, reqConfig.DamperFactor.Alpha, 1e-6)
+		assert.Equal(t, float64(float32(0.5)), reqConfig.DamperFactor.MinValue)
+		assert.Equal(t, scheduler.DamperFactorMethodExponential, reqConfig.DamperFactor.Method)
+	})
+
+	t.Run("adapts an explicit damper apply method", func(t *testing.T) {
+		req := &pb.IdentifySLABreachRootCauseRequest{
+			ProjectNames: []string{"p_root"},
+			DamperFactor: &pb.DamperFactor{
+				BaseValue: 2,
+				Alpha:     0.5,
+				MinValue:  1,
+				Method:    pb.DamperFactor_APPLY_METHOD_CONSTANT,
+			},
+		}
+
+		reqConfig, err := fromRootCauseRequest(req)
+
+		assert.NoError(t, err)
+		assert.Equal(t, scheduler.DamperFactorMethodConstant, reqConfig.DamperFactor.Method)
+	})
 }
 
 func TestToRootCauseResponse(t *testing.T) {

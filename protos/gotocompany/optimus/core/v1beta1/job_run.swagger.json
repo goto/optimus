@@ -1139,6 +1139,9 @@
           "type": "integer",
           "format": "int32",
           "description": "How far from reference_time to look for the targets' next/previous runs."
+        },
+        "damperFactor": {
+          "$ref": "#/definitions/v1beta1DamperFactor"
         }
       }
     },

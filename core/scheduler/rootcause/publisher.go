@@ -50,8 +50,9 @@ func NewPublisher(config PublisherConfig) *Publisher {
 type TargetEvaluation struct {
 	// Target is the SLA-carrying lineage whose breach is being explained.
 	Target *scheduler.JobLineageSummary
-	// HistoricalByJob holds the historical task/hook baseline per job reachable from the target
-	HistoricalByJob map[scheduler.JobName]scheduler.JobHistoricalDuration
+	// HistoricalByJob holds the historical task+hook runtime baseline per job reachable
+	// from the target
+	HistoricalByJob map[scheduler.JobName]time.Duration
 	// Finding is the shared inferred-SLA breach analysis of the target; the gate below
 	// requires at least one breach origin before any reason is evaluated.
 	Finding       *BreachFinding
@@ -575,30 +576,24 @@ type jobDelay = struct {
 	induced time.Duration
 }
 
-// inducedRuntimeDelay is one job's induced runtime delay: observed task and hook runtime
-// (end time, or the reference time for a still-running task) minus the historical baseline.
-// Components are clamped at zero individually so a fast task cannot cancel out a slow hook.
-func inducedRuntimeDelay(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]scheduler.JobHistoricalDuration, referenceTime time.Time) time.Duration {
+// inducedRuntimeDelay is one job's induced runtime delay: the observed total runtime
+// (the job's actual end, or the reference time while it is still running) minus its
+// historical task+hook baseline, clamped at zero — the SLA cares about the job's total
+// completion, so a fast phase may offset a slow one.
+func inducedRuntimeDelay(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]time.Duration, referenceTime time.Time) time.Duration {
 	run := node.JobRunSummary
 	if run.TaskStartTime == nil {
 		return 0
 	}
-	baseline := historicalByJob[node.JobName]
-
-	induced := time.Duration(0)
-	if taskEnd := run.TaskEndTime; taskEnd != nil {
-		induced += maxDuration(0, taskEnd.Sub(*run.TaskStartTime)-baseline.TaskDuration)
-	} else {
-		induced += maxDuration(0, referenceTime.Sub(*run.TaskStartTime)-baseline.TaskDuration)
+	end := referenceTime
+	if actualEnd := run.GetActualEndTime(); actualEnd != nil {
+		end = *actualEnd
 	}
-	if run.HookStartTime != nil {
-		hookEnd := referenceTime
-		if run.HookEndTime != nil {
-			hookEnd = *run.HookEndTime
-		}
-		induced += maxDuration(0, hookEnd.Sub(*run.HookStartTime)-baseline.HookDuration)
+	overrun := end.Sub(*run.TaskStartTime) - historicalByJob[node.JobName]
+	if overrun < 0 {
+		return 0
 	}
-	return induced
+	return overrun
 }
 
 func inducedByJobOnPath(path []*scheduler.JobExecutionSummary, ev TargetEvaluation, projectName tenant.ProjectName) []jobDelay {
@@ -612,13 +607,6 @@ func inducedByJobOnPath(path []*scheduler.JobExecutionSummary, ev TargetEvaluati
 		}
 	}
 	return delayed
-}
-
-func maxDuration(a, b time.Duration) time.Duration {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // nodeIncidentKey keys an incident on a lineage node's entity, normalizing the scheduled

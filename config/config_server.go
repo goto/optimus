@@ -126,7 +126,10 @@ type PotentialSLABreachConfig struct {
 	EnablePersistentLogging bool    `mapstructure:"enable_persistent_logging" default:"false"`
 	// DedupImpactedJobs alerts each impacted (target) job run at most once. It reads what
 	// persistent logging writes, so it is a no-op unless EnablePersistentLogging is on.
-	DedupImpactedJobs       bool                    `mapstructure:"dedup_impacted_jobs" default:"false"`
+	DedupImpactedJobs bool `mapstructure:"dedup_impacted_jobs" default:"false"`
+	// SubscriberMode stops this job from computing lineage: it reads the incidents the
+	// root-cause publisher persists and alerts the impacted teams as a final warning.
+	SubscriberMode          bool                    `mapstructure:"subscriber_mode" default:"false"`
 	DurationEstimatorConfig DurationEstimatorConfig `mapstructure:"duration_estimator_config"`
 	HistoricalStartConfig   HistoricalStartConfig   `mapstructure:"historical_start_config"`
 }

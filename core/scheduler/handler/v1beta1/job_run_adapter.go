@@ -75,25 +75,7 @@ func buildIdentifySLABreachInputs(req *pb.IdentifyPotentialSLABreachRequest) ([]
 		referenceTime = req.GetReferenceTime().AsTime().UTC()
 	}
 
-	var method scheduler.DamperFactorMethod
-	pbMethod := req.GetDamperFactor().GetMethod()
-	switch pbMethod {
-	case pb.DamperFactor_APPLY_METHOD_DECREMENT:
-		method = scheduler.DamperFactorMethodDecrement
-	case pb.DamperFactor_APPLY_METHOD_CONSTANT:
-		method = scheduler.DamperFactorMethodConstant
-	case pb.DamperFactor_APPLY_METHOD_EXPONENTIAL:
-		fallthrough
-	default:
-		method = scheduler.DamperFactorMethodExponential
-	}
-
-	damperFactor := scheduler.DamperFactor{
-		Alpha:     float64(req.GetDamperFactor().GetAlpha()),
-		MinValue:  float64(req.GetDamperFactor().GetMinValue()),
-		BaseValue: float64(req.GetDamperFactor().GetBaseValue()),
-		Method:    method,
-	}
+	damperFactor := fromDamperFactor(req.GetDamperFactor())
 
 	reqConfig := service.JobSLAPredictorRequestConfig{
 		ReferenceTime:        referenceTime,
@@ -400,6 +382,28 @@ var rootCauseStatusToProto = map[scheduler.ReasonStatus]pb.RootCauseStatus{
 	scheduler.ReasonStatusResolved: pb.RootCauseStatus_ROOT_CAUSE_STATUS_RESOLVED,
 }
 
+// fromDamperFactor adapts the request's damper factor; an unset method falls back to
+// the exponential application, matching the config's default.
+func fromDamperFactor(pbDamper *pb.DamperFactor) scheduler.DamperFactor {
+	var method scheduler.DamperFactorMethod
+	switch pbDamper.GetMethod() {
+	case pb.DamperFactor_APPLY_METHOD_DECREMENT:
+		method = scheduler.DamperFactorMethodDecrement
+	case pb.DamperFactor_APPLY_METHOD_CONSTANT:
+		method = scheduler.DamperFactorMethodConstant
+	case pb.DamperFactor_APPLY_METHOD_EXPONENTIAL:
+		fallthrough
+	default:
+		method = scheduler.DamperFactorMethodExponential
+	}
+	return scheduler.DamperFactor{
+		Alpha:     float64(pbDamper.GetAlpha()),
+		MinValue:  float64(pbDamper.GetMinValue()),
+		BaseValue: float64(pbDamper.GetBaseValue()),
+		Method:    method,
+	}
+}
+
 func fromRootCauseRequest(req *pb.IdentifySLABreachRootCauseRequest) (service.RootCauseRequestConfig, error) {
 	projectNames := make([]tenant.ProjectName, 0, len(req.GetProjectNames()))
 	for _, projectNameStr := range req.GetProjectNames() {
@@ -436,6 +440,7 @@ func fromRootCauseRequest(req *pb.IdentifySLABreachRootCauseRequest) (service.Ro
 		ReferenceTime:        referenceTime,
 		EnableAlert:          req.GetEnableAlert(),
 		ScheduleRangeInHours: time.Duration(req.GetScheduledRangeInHours()) * time.Hour,
+		DamperFactor:         fromDamperFactor(req.GetDamperFactor()),
 	}, nil
 }
 

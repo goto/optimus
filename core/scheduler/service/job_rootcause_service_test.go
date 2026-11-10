@@ -1236,3 +1236,82 @@ func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {
 		notifier.AssertNotCalled(t, "SendRootCauseBreach")
 	})
 }
+
+func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
+	ctx := context.Background()
+	projectName := tenant.ProjectName("p_root")
+
+	teamGetter := &mockProjectTeamGetter{}
+	projectWithTeam, err := tenant.NewProject("p_root", map[string]string{
+		tenant.ProjectStoragePathKey:   "gs://bucket",
+		tenant.ProjectSchedulerHost:    "airflow.example.com",
+		tenant.ProjectAlertManagerTeam: "proj-team",
+	}, nil)
+	assert.NoError(t, err)
+	teamGetter.On("Get", ctx, mock.Anything).Return(projectWithTeam, nil).Maybe()
+
+	incidentWith := func(finished bool) *scheduler.SLABreachIncidentWithImpacts {
+		return &scheduler.SLABreachIncidentWithImpacts{
+			Incident: &scheduler.SLABreachIncident{
+				Key: scheduler.SLABreachIncidentKey{
+					ProjectName: projectName,
+					JobName:     "job_upstream",
+					ScheduledAt: time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC),
+				},
+				Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{
+					Reason:              scheduler.TierRuntimeDelay,
+					Status:              scheduler.ReasonStatusActive,
+					InducedDelaySeconds: 3300,
+					IsJobFinished:       finished,
+				}}},
+			},
+		}
+	}
+
+	newSvc := func(alertSeverity string, notifier *mockRootCauseNotifier) *service.JobRootCauseService {
+		alertConfig := config.RootCauseAlertConfig{
+			RuntimeDelayThresholdMinutes:    30,
+			SchedulerDelayMinutesPerDepth:   2.5,
+			ThirdPartyDelayThresholdSeconds: 600,
+			AlertSeverity:                   alertSeverity,
+		}
+		// the alert path only touches the notifier and the team getter; the getters
+		// behind the engine stay nil
+		return service.NewJobRootCauseService(log.NewNoop(), alertConfig, rcPotentialConfig(),
+			nil, nil, nil, nil, nil, nil, []string{"dex"}, notifier, teamGetter)
+	}
+
+	assertSeverity := func(expected string) func(mock.Arguments) {
+		return func(args mock.Arguments) {
+			alert := args.Get(0).(*scheduler.RootCauseBreachAlert)
+			assert.Equal(t, expected, alert.Severity)
+		}
+	}
+
+	t.Run("a finished cause downgrades the configured CRITICAL to WARNING", func(t *testing.T) {
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("WARNING"))
+
+		svc := newSvc("CRITICAL", notifier)
+		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
+		notifier.AssertExpectations(t)
+	})
+
+	t.Run("a still-running cause keeps the configured CRITICAL", func(t *testing.T) {
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("CRITICAL"))
+
+		svc := newSvc("CRITICAL", notifier)
+		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(false)}, nil)
+		notifier.AssertExpectations(t)
+	})
+
+	t.Run("a finished cause is WARNING even when the config is INFO", func(t *testing.T) {
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("WARNING"))
+
+		svc := newSvc("INFO", notifier)
+		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
+		notifier.AssertExpectations(t)
+	})
+}

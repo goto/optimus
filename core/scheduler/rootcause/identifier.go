@@ -117,31 +117,20 @@ func (i *Identifier) Identify(
 	map[scheduler.JobName]*scheduler.JobState,
 	map[scheduler.JobName][]*scheduler.JobState,
 ) {
-	// note: no need to realert again on target job which does not breached its SLA
-	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
-		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
-			i.l.Info("target job finished before SLA, skipping breach detection",
-				"job", jobTarget.JobName, "end_time", endTime, "sla", targetedSLA)
-			return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
-		}
+	// find every breaching job and its breach origins via the shared inferred-SLA analysis
+	finding := i.FindInferredBreaches(ctx, jobTarget, jobDurations, startOffsets, targetedSLA, skipJobNames, damperFactor, referenceTime)
+	if len(finding.Origins) == 0 {
+		return make(map[scheduler.JobName]*scheduler.JobState), make(map[scheduler.JobName][]*scheduler.JobState)
 	}
-
-	// calculate inferred SLAs and record the tightest-path predecessor chain for level/path reporting
-	// S(u|j) = S(j) - D(u)
-	inferredSLAsByJobTarget, bottleneck := i.CalculateInferredSLAs(jobTarget, jobDurations, targetedSLA, damperFactor)
-
-	// populate jobSLAStatesByJobTargetName
-	jobSLAStates := populateJobSLAStates(jobDurations, startOffsets, inferredSLAsByJobTarget)
-
-	// identify jobs that might breach their SLAs based on current time and inferred SLAs
-	// T(now)>= S(u|j) and the job u has not completed yet
-	// T(now)>= S(u|j) - D(u) and the job u has not started yet
-	rootCauses, breachFullPaths, nodeByName := i.identifyRootCauses(ctx, jobTarget, jobSLAStates, bottleneck, skipJobNames, referenceTime)
 
 	// classify (and, where ambiguous, escalate to the upstream that actually caused the
 	// delay) before keying the result maps by JobName: a THIRD_PARTY_DELAY cause is keyed
-	// by the sensor, and when several leaves remain, only the max-delay one is returned.
-	rootCauses, breachFullPaths = i.classify(ctx, rootCauses, breachFullPaths, nodeByName, jobSLAStates, referenceTime)
+	// by the sensor, and when several origins remain, only the max-delay one is returned.
+	rootCauses := make([][]*scheduler.JobState, 0, len(finding.Origins))
+	for _, origin := range finding.Origins {
+		rootCauses = append(rootCauses, []*scheduler.JobState{origin})
+	}
+	rootCauses, breachFullPaths := i.classify(ctx, rootCauses, finding.OriginPaths, finding.NodeByName, finding.SLAStates, referenceTime)
 
 	// populate breachesCauses
 	breachesCauses := make(map[scheduler.JobName]*scheduler.JobState)
@@ -182,7 +171,7 @@ func (i *Identifier) Identify(
 }
 
 // classify resolves the reason behind every path's root cause, escalating to an upstream where
-// the reason turns out to be a relayed delay. It leaves the states it is given untouched and
+// the reason turns out to be a relayed delay. It origins the states it is given untouched and
 // returns both path sets with the resolved causes substituted in, since a cause can be shared
 // between the two sets and can appear mid-path as well as at the end.
 func (i *Identifier) classify(ctx context.Context, rootCauses, breachFullPaths [][]*scheduler.JobState, nodeByName map[scheduler.JobName]*scheduler.JobLineageSummary, jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState, referenceTime time.Time) (resolvedRootCauses, resolvedFullPaths [][]*scheduler.JobState) {
@@ -535,14 +524,15 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 	return inferredSLAs, bottleneck
 }
 
-// identifySLABreachRootCauses identifies jobs that might breach their SLA and traces the
-// root causes back to the source via the tightest-path predecessor chain recorded during
-// inferred-SLA calculation.
+// findBreachStates flags every job that might breach its SLA based on current time and
+// inferred SLAs:
 //
-// A job is a *true* root cause when it is breaching but none of its direct upstreams are
-// also breaching. This graph-based rule collapses diamond lineages to the single deepest
-// breaching job regardless of which traversal branch visits the shared ancestor first.
-func (i *Identifier) identifyRootCauses(
+//	T(now) >= S(u|j) and the job u has not completed yet
+//	T(now) >= S(u|j) - D(u) and the job u has not started yet
+//
+// It returns the breach states keyed by job name plus the lineage nodes visited; breach
+// causes are derived from them by breachOrigins.
+func (i *Identifier) findBreachStates(
 	ctx context.Context,
 	jobTarget *scheduler.JobLineageSummary,
 	jobSLAStates map[scheduler.JobName]*scheduler.JobSLAState,
@@ -550,8 +540,7 @@ func (i *Identifier) identifyRootCauses(
 	skipJobNames map[scheduler.JobName]bool,
 	referenceTime time.Time,
 ) (
-	[][]*scheduler.JobState,
-	[][]*scheduler.JobState,
+	map[scheduler.JobName]*scheduler.JobState,
 	map[scheduler.JobName]*scheduler.JobLineageSummary,
 ) {
 	jobBreachStates := make(map[scheduler.JobName]*scheduler.JobState)
@@ -643,36 +632,7 @@ func (i *Identifier) identifyRootCauses(
 		stack = append(stack, job.Upstreams...)
 	}
 
-	// find exact root causes:
-	// breaching jobs with no breaching direct upstream
-	// this logic below makes propagated upstream breaches do not appear
-	// as root cause of the target job breach
-	rootCauses := make([][]*scheduler.JobState, 0)
-	fullPaths := make([][]*scheduler.JobState, 0)
-	for jobName, breachState := range jobBreachStates {
-		node, ok := nodeByName[jobName]
-		if !ok {
-			continue
-		}
-
-		hasBreachingUpstream := false
-		for _, upstream := range node.Upstreams {
-			if _, breaching := jobBreachStates[upstream.JobName]; breaching {
-				hasBreachingUpstream = true
-				break
-			}
-		}
-		if hasBreachingUpstream {
-			continue
-		}
-		rootCauses = append(rootCauses, []*scheduler.JobState{breachState})
-		path := reconstructStatePath(jobTarget.JobName, jobName, bottleneck, jobSLAStates, jobBreachStates, nodeByName)
-		if len(path) > 0 {
-			fullPaths = append(fullPaths, path)
-		}
-	}
-
-	return rootCauses, fullPaths, nodeByName
+	return jobBreachStates, nodeByName
 }
 
 // reconstructStatePath rebuilds the path from the target down to breachName by following the

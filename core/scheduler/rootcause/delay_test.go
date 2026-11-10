@@ -153,6 +153,29 @@ func TestInducedDelay(t *testing.T) {
 	})
 }
 
+// TestPickMaxDelayTieBreak verifies equal-delay causes resolve deterministically by
+// job name instead of map iteration order.
+func TestPickMaxDelayTieBreak(t *testing.T) {
+	state := func(name string, delay time.Duration) *scheduler.JobState {
+		return &scheduler.JobState{
+			JobName:  scheduler.JobName(name),
+			Evidence: scheduler.RootCauseEvidence{InducedDelay: delay},
+		}
+	}
+
+	t.Run("higher delay wins", func(t *testing.T) {
+		got := pickMaxDelay([]*scheduler.JobState{state("job-A", time.Minute), state("job-B", 2*time.Minute)})
+		assert.Equal(t, scheduler.JobName("job-B"), got.JobName)
+	})
+
+	t.Run("equal delay picks the lowest job name regardless of order", func(t *testing.T) {
+		forward := pickMaxDelay([]*scheduler.JobState{state("job-B", time.Minute), state("job-A", time.Minute)})
+		reverse := pickMaxDelay([]*scheduler.JobState{state("job-A", time.Minute), state("job-B", time.Minute)})
+		assert.Equal(t, scheduler.JobName("job-A"), forward.JobName)
+		assert.Equal(t, forward.JobName, reverse.JobName)
+	})
+}
+
 func TestAttributeThirdPartyIdentity(t *testing.T) {
 	state := scheduler.JobState{
 		JobName: "job-B",

@@ -104,6 +104,63 @@ func TestBuildRootCauseBreachPayload(t *testing.T) {
 		assert.Equal(t, true, payload.Data["is_job_finished"])
 	})
 
+	t.Run("a project-scoped roll-up shows the job's own delay next to the project total", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "proj-team",
+			Project:          "p_a",
+			RootCauseProject: "p_a",
+			RootCauseJob:     "job_a2",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:                     scheduler.TierRuntimeDelay,
+				Status:                     scheduler.ReasonStatusActive,
+				InducedDelaySeconds:        4800, // 80m project total, what crossed the threshold
+				DelayScope:                 scheduler.DelayScopeProject,
+				MaxNodeInducedDelaySeconds: 2700, // 45m, the representative job alone
+			},
+		})
+
+		// the displayed delay is the job's own, not the roll-up
+		assert.Equal(t, "45m0s", payload.Data["induced_delay"])
+		assert.Equal(t, "project", payload.Data["induced_delay_scope"])
+		assert.Equal(t, "1h20m0s", payload.Data["project_total_induced_delay"])
+	})
+
+	t.Run("a job-scoped reason keeps the measured delay with no roll-up keys", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "proj-team",
+			Project:          "p_root",
+			RootCauseProject: "p_root",
+			RootCauseJob:     "job_offender",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:              scheduler.TierRuntimeDelay,
+				Status:              scheduler.ReasonStatusActive,
+				InducedDelaySeconds: 2400,
+				DelayScope:          scheduler.DelayScopeJob,
+			},
+		})
+
+		assert.Equal(t, "40m0s", payload.Data["induced_delay"])
+		assert.NotContains(t, payload.Data, "induced_delay_scope")
+		assert.NotContains(t, payload.Data, "project_total_induced_delay")
+	})
+
+	t.Run("a legacy roll-up row without the max-node field falls back to the total", func(t *testing.T) {
+		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
+			Team:             "proj-team",
+			Project:          "p_a",
+			RootCauseProject: "p_a",
+			RootCauseJob:     "job_a2",
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:              scheduler.TierRuntimeDelay,
+				Status:              scheduler.ReasonStatusActive,
+				InducedDelaySeconds: 4800,
+			},
+		})
+
+		assert.Equal(t, "1h20m0s", payload.Data["induced_delay"])
+		assert.NotContains(t, payload.Data, "project_total_induced_delay")
+	})
+
 	t.Run("severity follows the alert and CRITICAL marks the environment as production", func(t *testing.T) {
 		payload := a.buildRootCauseBreachPayload(&scheduler.RootCauseBreachAlert{
 			Team:             "streaming-team",

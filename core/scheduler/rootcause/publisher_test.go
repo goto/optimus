@@ -179,10 +179,15 @@ func TestPublisher_Evaluate(t *testing.T) {
 		}
 		// condition 1: b1 is individually over the threshold
 		assert.Equal(t, 2700, byJob["job_b1"].Reason.InducedDelaySeconds) // 45m
+		assert.Equal(t, scheduler.DelayScopeJob, byJob["job_b1"].Reason.DelayScope)
 		// condition 2/3: p_a's 45m flat sum, keyed on its max-delay job a2
 		projectDetection := byJob["job_a2"]
 		assert.Equal(t, "p_a", projectDetection.IncidentKey.ProjectName.String())
 		assert.Equal(t, 2700, projectDetection.Reason.InducedDelaySeconds) // 45m project total
+		// the alert-facing field carries the representative job's own delay (25m), while
+		// thresholds and suppression keep reading the project total
+		assert.Equal(t, scheduler.DelayScopeProject, projectDetection.Reason.DelayScope)
+		assert.Equal(t, int(25*time.Minute/time.Second), projectDetection.Reason.MaxNodeInducedDelaySeconds)
 	})
 
 	t.Run("scheduler delay is the critical path's summed wait against the depth budget", func(t *testing.T) {

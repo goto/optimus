@@ -331,8 +331,20 @@ func (a *AlertManager) buildRootCauseBreachPayload(alert *scheduler.RootCauseBre
 	if alert.RootCauseScheduledAt != nil {
 		data["root_cause_scheduled_at"] = alert.RootCauseScheduledAt.UTC().Format(time.RFC3339)
 	}
-	if alert.Reason.InducedDelaySeconds > 0 {
-		data["induced_delay"] = formatDuration(time.Duration(alert.Reason.InducedDelaySeconds) * time.Second)
+
+	displayDelaySeconds := alert.Reason.InducedDelaySeconds
+	if alert.Reason.MaxNodeInducedDelaySeconds > 0 { // if project-level
+		displayDelaySeconds = alert.Reason.MaxNodeInducedDelaySeconds
+	}
+	if displayDelaySeconds > 0 {
+		data["induced_delay"] = formatDuration(time.Duration(displayDelaySeconds) * time.Second)
+	}
+
+	if alert.Reason.DelayScope == scheduler.DelayScopeProject {
+		data["induced_delay_scope"] = scheduler.DelayScopeProject
+		if alert.Reason.InducedDelaySeconds > 0 {
+			data["project_total_induced_delay"] = formatDuration(time.Duration(alert.Reason.InducedDelaySeconds) * time.Second)
+		}
 	}
 	if len(alert.Reason.BlockedOnSensors) > 0 {
 		data["blocked_on_sensors"] = alert.Reason.BlockedOnSensors

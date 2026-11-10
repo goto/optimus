@@ -508,6 +508,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				Status:              scheduler.ReasonStatusActive,
 				InducedDelaySeconds: int(delayed.induced.Seconds()),
 				IsJobFinished:       delayed.node.JobRunSummary.IsFinished(),
+				DelayScope:          scheduler.DelayScopeJob,
 			},
 			ImpactedJobs: impacted,
 		})
@@ -547,10 +548,12 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 		detections = append(detections, scheduler.RootCauseDetection{
 			IncidentKey: nodeIncidentKey(maxNode),
 			Reason: scheduler.RootCauseReasonDetail{
-				Reason:              scheduler.TierRuntimeDelay,
-				Status:              scheduler.ReasonStatusActive,
-				InducedDelaySeconds: int(maxTotal.Seconds()),
-				IsJobFinished:       maxNode.JobRunSummary.IsFinished(),
+				Reason:                     scheduler.TierRuntimeDelay,
+				Status:                     scheduler.ReasonStatusActive,
+				InducedDelaySeconds:        int(maxTotal.Seconds()),
+				IsJobFinished:              maxNode.JobRunSummary.IsFinished(),
+				DelayScope:                 scheduler.DelayScopeProject,
+				MaxNodeInducedDelaySeconds: int(maxJobDelay.Seconds()),
 			},
 			ImpactedJobs: impacted,
 		})

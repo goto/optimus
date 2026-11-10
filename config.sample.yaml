@@ -61,6 +61,10 @@ alerting:
   data_console: ""
   enable_slack: false
   enable_pager_duty: false
+  # operator_sla_miss caps task/sensor/hook duration alerts per project at WARNING
+  # regardless of job-spec severity; CRITICAL loses the production label (no PD alert).
+  operator_sla_miss:
+    warning_only_projects: []
   # shared by any SLA path that classifies why a job is late
   root_cause:
     # sensor wait before this UTC hour is not counted as third-party induced delay.

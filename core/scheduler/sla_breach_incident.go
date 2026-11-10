@@ -45,17 +45,26 @@ const (
 	ReasonStatusResolved ReasonStatus = "resolved"
 )
 
+const (
+	DelayScopeJob     = "job"
+	DelayScopeProject = "project"
+)
+
 type RootCauseReasonDetail struct {
-	Reason              SLABreachTier `json:"reason"`
-	Status              ReasonStatus  `json:"status"`
-	InducedDelaySeconds int           `json:"induced_delay_seconds"`
-	BlockedOnSensors    []string      `json:"blocked_on_sensors,omitempty"`
-	SourceType          string        `json:"source_type,omitempty"`
+	Reason SLABreachTier `json:"reason"`
+	Status ReasonStatus  `json:"status"`
+	// InducedDelaySeconds is the delay that counts toward thresholds and suppression
+	InducedDelaySeconds int      `json:"induced_delay_seconds"`
+	BlockedOnSensors    []string `json:"blocked_on_sensors,omitempty"`
+	SourceType          string   `json:"source_type,omitempty"`
 	// IsJobFinished records whether the offending run had already finished when this
 	// reason was observed. The alert router uses it to send exactly one notification for
 	// a finished cause instead of hourly repeats. Absent (false) on older rows, which
 	// correctly reads as "was still running when last seen".
-	IsJobFinished bool `json:"is_job_finished,omitempty"`
+	IsJobFinished bool   `json:"is_job_finished,omitempty"`
+	DelayScope    string `json:"delay_scope,omitempty"`
+	// MaxNodeInducedDelaySeconds is the representative job's own induced delay for job-scoped runtime reason
+	MaxNodeInducedDelaySeconds int `json:"max_node_induced_delay_seconds,omitempty"`
 }
 
 type RootCauseDetails struct {

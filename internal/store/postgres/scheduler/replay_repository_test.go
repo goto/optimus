@@ -47,7 +47,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("RegisterReplay", func(t *testing.T) {
 		t.Run("store replay request and the runs", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id", "user_id")
@@ -61,7 +61,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("UpdateReplay", func(t *testing.T) {
 		t.Run("updates replay request and update the runs", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id", "user_id")
@@ -78,7 +78,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("GetReplayRequestsByStatus", func(t *testing.T) {
 		t.Run("return replay requests given list of status", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig1 := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id1", "user_id")
@@ -108,7 +108,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("GetReplaysByProject", func(t *testing.T) {
 		t.Run("return replay list for corresponding project name", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			tnnt, _ := tenant.NewTenant("test-project1", "ns-1")
 			tnntOther, _ := tenant.NewTenant("test-project2", "ns-1")
@@ -141,7 +141,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Len(t, replayReqs, 1)
 		})
 		t.Run("return empty list when replay is not existed on given project", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			replayReqs, err := replayRepo.GetReplaysByProject(ctx, tnnt.ProjectName(), 3)
 			assert.Nil(t, err)
@@ -151,7 +151,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("GetReplayJobConfig", func(t *testing.T) {
 		t.Run("return replay task config when scheduledAt is provided", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
 			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
@@ -171,7 +171,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Equal(t, replayJobConfig, actualReplayJobConfig)
 		})
 		t.Run("return latest in progress replay task config for the same filter", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
 			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
@@ -194,7 +194,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Equal(t, secondJobConfig, actualReplayJobConfig)
 		})
 		t.Run("return empty replay task config when there's no extra config in replay config", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
 			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
@@ -213,7 +213,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 
 	t.Run("GetReplayByID", func(t *testing.T) {
 		t.Run("return no replay with runs if not exist", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayID := uuid.New()
@@ -224,7 +224,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 		})
 
 		t.Run("return replay with no runs if runs is empty", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
 			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
@@ -240,7 +240,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 			assert.Empty(t, replayWithRuns.Runs)
 		})
 		t.Run("return replay with runs given replay ID", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 			startTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-01T15:04:05Z")
 			endTime, _ := time.Parse(scheduler.ISODateFormat, "2022-01-03T15:04:05Z")
@@ -259,7 +259,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 	})
 	t.Run("AcquireReplayRequest", func(t *testing.T) {
 		t.Run("successfully acquires replay request", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id", "user_id")
@@ -274,7 +274,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 		})
 
 		t.Run("fails to acquire replay request if already acquired", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id", "user_id")
@@ -294,7 +294,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 		})
 
 		t.Run("fails to acquire replay request if not found", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayID := uuid.New()
@@ -305,7 +305,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 	})
 	t.Run("ScanAbandonedReplayRequests", func(t *testing.T) {
 		t.Run("returns replay requests that are in non-terminal states and have not been updated within the specified duration", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayConfig1 := scheduler.NewReplayConfig(startTime, endTime, true, replayJobConfig, description, "", "approval_id1", "user_id")
@@ -329,7 +329,7 @@ func TestPostgresSchedulerRepository(t *testing.T) {
 		})
 
 		t.Run("returns empty list if no replay requests match the criteria", func(t *testing.T) {
-			db := dbSetup()
+			db := dbSetup(ctx)
 			replayRepo := postgres.NewReplayRepository(db)
 
 			replayReqs, err := replayRepo.ScanAbandonedReplayRequests(ctx, 1*time.Second)

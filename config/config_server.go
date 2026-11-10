@@ -93,17 +93,23 @@ type TelemetryConfig struct {
 }
 
 type AlertingConfig struct {
-	EventManager    EventManagerConfig `mapstructure:"alert_manager"`
-	Dashboard       string             `mapstructure:"dashboard"`
-	DataConsole     string             `mapstructure:"data_console"`
-	EnableSlack     bool               `mapstructure:"enable_slack"`
-	EnablePagerDuty bool               `mapstructure:"enable_pager_duty"`
+	EventManager    EventManagerConfig    `mapstructure:"alert_manager"`
+	Dashboard       string                `mapstructure:"dashboard"`
+	DataConsole     string                `mapstructure:"data_console"`
+	EnableSlack     bool                  `mapstructure:"enable_slack"`
+	EnablePagerDuty bool                  `mapstructure:"enable_pager_duty"`
+	OperatorSLAMiss OperatorSLAMissConfig `mapstructure:"operator_sla_miss"`
 	// TODO: deprecate RootCauseConfig when RootCauseAlertConfig fully reliable
 	RootCause                RootCauseConfig                     `mapstructure:"root_cause"`
 	AutoSLABreachConfig      DurationEstimatorConfig             `mapstructure:"auto_sla_breach_config"`
 	PotentialSLABreachConfig PotentialSLABreachConfig            `mapstructure:"potential_sla_breach_config"`
 	RootCauseAlert           RootCauseAlertConfig                `mapstructure:"root_cause_alert"`
 	DeduplicationConfig      map[string]AlertDeduplicationConfig `mapstructure:"deduplication"`
+}
+
+type OperatorSLAMissConfig struct {
+	// WarningOnlyProjects caps these projects' task/sensor/hook duration alerts at WARNING;
+	WarningOnlyProjects []string `mapstructure:"warning_only_projects"`
 }
 
 // RootCauseConfig tunes how late jobs are classified (RUNNING_LONG, STARTED_LATE,

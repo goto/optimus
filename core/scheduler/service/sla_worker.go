@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
@@ -26,28 +27,35 @@ type RunScheduler interface {
 }
 
 type SLAWorker struct {
-	alertManager    AlertManager
-	operatorSLARepo OperatorSLARepo
-	jobRepo         JobRepo
-	jobRunRepo      JobRunRepository
-	operatorRunRepo OperatorRunRepository
-	tenantService   TenantService
-	scheduler       RunScheduler
-	logger          log.Logger
+	alertManager        AlertManager
+	operatorSLARepo     OperatorSLARepo
+	jobRepo             JobRepo
+	jobRunRepo          JobRunRepository
+	operatorRunRepo     OperatorRunRepository
+	tenantService       TenantService
+	scheduler           RunScheduler
+	logger              log.Logger
+	warningOnlyProjects map[string]struct{}
 }
 
 func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo OperatorSLARepo, jobRepo JobRepo,
 	jobRunRepo JobRunRepository, operatorRunRepo OperatorRunRepository, tenantService TenantService, scheduler RunScheduler,
+	operatorSLAMissConfig config.OperatorSLAMissConfig,
 ) *SLAWorker {
+	warningOnlyProjects := map[string]struct{}{}
+	for _, projectName := range operatorSLAMissConfig.WarningOnlyProjects {
+		warningOnlyProjects[projectName] = struct{}{}
+	}
 	return &SLAWorker{
-		logger:          logger,
-		alertManager:    alertManager,
-		operatorSLARepo: operatorSLARepo,
-		jobRepo:         jobRepo,
-		jobRunRepo:      jobRunRepo,
-		operatorRunRepo: operatorRunRepo,
-		tenantService:   tenantService,
-		scheduler:       scheduler,
+		logger:              logger,
+		alertManager:        alertManager,
+		operatorSLARepo:     operatorSLARepo,
+		jobRepo:             jobRepo,
+		jobRunRepo:          jobRunRepo,
+		operatorRunRepo:     operatorRunRepo,
+		tenantService:       tenantService,
+		scheduler:           scheduler,
+		warningOnlyProjects: warningOnlyProjects,
 	}
 }
 
@@ -133,9 +141,21 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, job *scheduler.Job
 		}
 	}
 
-	alertAttr := getAlertAttributes(tenantWithDetails, alertTeam, alertSeverity.String(), alertMsg, operatorRun.Status, slaObj)
+	alertAttr := getAlertAttributes(tenantWithDetails, alertTeam, w.cappedSeverity(job.Tenant.ProjectName().String(), alertSeverity).String(), alertMsg, operatorRun.Status, slaObj)
 	w.alertManager.SendOperatorSLAEvent(alertAttr)
 	return nil
+}
+
+// cappedSeverity downgrades CRITICAL to WARNING for projects listed in alerting.operator_sla_miss.
+func (w *SLAWorker) cappedSeverity(projectName string, severity scheduler.Severity) scheduler.Severity {
+	if severity != scheduler.Critical {
+		return severity
+	}
+	if _, ok := w.warningOnlyProjects[projectName]; !ok {
+		return severity
+	}
+	w.logger.Info("task-duration alert severity capped to WARNING by project config", "project", projectName)
+	return scheduler.Warning
 }
 
 func (w *SLAWorker) process(ctx context.Context, signature string, processDuration time.Duration) {

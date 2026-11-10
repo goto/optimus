@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
 )
@@ -113,7 +114,7 @@ func TestSLAWorkerProcess(t *testing.T) {
 
 		alertManager := new(mockSLAAlertManager)
 
-		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, jobRepo, nil, nil, nil, runScheduler)
+		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, jobRepo, nil, nil, nil, runScheduler, config.OperatorSLAMissConfig{})
 		worker.process(ctx, uuid.New().String(), time.Minute)
 
 		operatorSLARepo.AssertExpectations(t)
@@ -152,10 +153,133 @@ func TestSLAWorkerProcess(t *testing.T) {
 
 		alertManager := new(mockSLAAlertManager)
 
-		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, jobRepo, nil, nil, nil, runScheduler)
+		worker := NewSLAWorker(log.NewNoop(), alertManager, operatorSLARepo, jobRepo, nil, nil, nil, runScheduler, config.OperatorSLAMissConfig{})
 		worker.process(ctx, uuid.New().String(), time.Minute)
 
 		operatorSLARepo.AssertExpectations(t)
 		alertManager.AssertNotCalled(t, "SendOperatorSLAEvent", mock.Anything)
+	})
+}
+
+// embed the full repositories so only the methods SendOperatorSLAEvent touches need stubs
+type capJobRunRepo struct {
+	JobRunRepository
+}
+
+func (capJobRunRepo) GetByScheduledAt(context.Context, tenant.Tenant, scheduler.JobName, time.Time) (*scheduler.JobRun, error) {
+	return &scheduler.JobRun{}, nil
+}
+
+type capOperatorRunRepo struct {
+	OperatorRunRepository
+}
+
+func (capOperatorRunRepo) GetOperatorRun(context.Context, string, scheduler.OperatorType, uuid.UUID) (*scheduler.OperatorRun, error) {
+	return &scheduler.OperatorRun{}, nil
+}
+
+type capTenantService struct {
+	TenantService
+}
+
+func (capTenantService) GetDetails(context.Context, tenant.Tenant) (*tenant.WithDetails, error) {
+	return &tenant.WithDetails{}, nil
+}
+
+func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
+	ctx := context.Background()
+
+	jobName, err := scheduler.JobNameFrom("my-job")
+	require.NoError(t, err)
+
+	criticalSLAConfig := &scheduler.SLAAlertConfig{
+		DurationThreshold: 30 * time.Minute,
+		Severity:          scheduler.Critical,
+	}
+
+	newSLA := func(projectName tenant.ProjectName) *scheduler.OperatorsSLA {
+		return &scheduler.OperatorsSLA{
+			JobName:      jobName,
+			ProjectName:  projectName,
+			OperatorName: "transformer",
+			OperatorType: scheduler.OperatorTask,
+			AlertTag:     criticalSLAConfig.Tag(),
+		}
+	}
+
+	newWorker := func(projects ...string) (*SLAWorker, *mockSLAAlertManager) {
+		job := &scheduler.Job{
+			Name:   jobName,
+			Tenant: tenant.Tenant{}, // set per project below
+			Task: &scheduler.Task{
+				AlertConfig: &scheduler.OperatorAlertConfig{SLAAlertConfigs: []*scheduler.SLAAlertConfig{criticalSLAConfig}},
+			},
+		}
+		jobRepo := new(mockSLAJobRepo)
+		jobRepo.On("GetJob", mock.Anything, mock.Anything, jobName).Return(job, nil)
+
+		alertManager := new(mockSLAAlertManager)
+		worker := NewSLAWorker(log.NewNoop(), alertManager, nil, jobRepo, capJobRunRepo{}, capOperatorRunRepo{}, capTenantService{}, nil,
+			config.OperatorSLAMissConfig{WarningOnlyProjects: projects})
+		return worker, alertManager
+	}
+
+	t.Run("should cap CRITICAL to WARNING for projects in warning_only_projects", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(projName.String())
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		alertManager.On("SendOperatorSLAEvent", mock.MatchedBy(func(attr *scheduler.OperatorSLAAlertAttrs) bool {
+			return attr.Severity == scheduler.Warning.String()
+		})).Return(nil).Once()
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, newSLA(projName)))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should keep CRITICAL for projects not in warning_only_projects", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("quiet-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker("other-proj")
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		alertManager.On("SendOperatorSLAEvent", mock.MatchedBy(func(attr *scheduler.OperatorSLAAlertAttrs) bool {
+			return attr.Severity == scheduler.Critical.String()
+		})).Return(nil).Once()
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, newSLA(projName)))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should keep INFO for projects in warning_only_projects (cap, not force)", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(projName.String())
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		infoSLAConfig := &scheduler.SLAAlertConfig{DurationThreshold: 30 * time.Minute, Severity: scheduler.Info}
+		slaObj := newSLA(projName)
+		slaObj.AlertTag = infoSLAConfig.Tag()
+		job.Task.AlertConfig.SLAAlertConfigs = []*scheduler.SLAAlertConfig{infoSLAConfig}
+
+		alertManager.On("SendOperatorSLAEvent", mock.MatchedBy(func(attr *scheduler.OperatorSLAAlertAttrs) bool {
+			return attr.Severity == scheduler.Info.String()
+		})).Return(nil).Once()
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, slaObj))
+		alertManager.AssertExpectations(t)
 	})
 }

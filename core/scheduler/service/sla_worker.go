@@ -154,7 +154,7 @@ func (w *SLAWorker) cappedSeverity(projectName string, severity scheduler.Severi
 	if _, ok := w.warningOnlyProjects[projectName]; !ok {
 		return severity
 	}
-	w.logger.Info("task-duration alert severity capped to WARNING by project config", "project", projectName)
+	w.logger.Info("operator SLA miss alert severity capped to WARNING by project config, project: %s", projectName)
 	return scheduler.Warning
 }
 

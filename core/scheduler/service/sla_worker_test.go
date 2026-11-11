@@ -45,6 +45,14 @@ func (m *mockSLAJobRepo) GetJob(ctx context.Context, projectName tenant.ProjectN
 	return args.Get(0).(*scheduler.Job), args.Error(1)
 }
 
+func (m *mockSLAJobRepo) GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error) {
+	args := m.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*scheduler.JobWithDetails), args.Error(1)
+}
+
 type mockSLARunScheduler struct {
 	mock.Mock
 }
@@ -207,7 +215,7 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		}
 	}
 
-	newWorker := func(projects ...string) (*SLAWorker, *mockSLAAlertManager) {
+	newWorker := func(cfg config.OperatorSLAMissConfig, jobLabels map[string]string) (*SLAWorker, *mockSLAAlertManager) {
 		job := &scheduler.Job{
 			Name:   jobName,
 			Tenant: tenant.Tenant{}, // set per project below
@@ -217,10 +225,11 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		}
 		jobRepo := new(mockSLAJobRepo)
 		jobRepo.On("GetJob", mock.Anything, mock.Anything, jobName).Return(job, nil)
+		jobRepo.On("GetJobDetails", mock.Anything, mock.Anything, jobName).
+			Return(&scheduler.JobWithDetails{Job: job, JobMetadata: &scheduler.JobMetadata{Labels: jobLabels}}, nil)
 
 		alertManager := new(mockSLAAlertManager)
-		worker := NewSLAWorker(log.NewNoop(), alertManager, nil, jobRepo, capJobRunRepo{}, capOperatorRunRepo{}, capTenantService{}, nil,
-			config.OperatorSLAMissConfig{WarningOnlyProjects: projects})
+		worker := NewSLAWorker(log.NewNoop(), alertManager, nil, jobRepo, capJobRunRepo{}, capOperatorRunRepo{}, capTenantService{}, nil, cfg)
 		return worker, alertManager
 	}
 
@@ -228,7 +237,7 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		projName, err := tenant.ProjectNameFrom("noisy-proj")
 		require.NoError(t, err)
 
-		worker, alertManager := newWorker(projName.String())
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{WarningOnlyProjects: []string{projName.String()}}, nil)
 		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
 		require.NoError(t, err)
 		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
@@ -246,7 +255,7 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		projName, err := tenant.ProjectNameFrom("quiet-proj")
 		require.NoError(t, err)
 
-		worker, alertManager := newWorker("other-proj")
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{WarningOnlyProjects: []string{"other-proj"}}, nil)
 		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
 		require.NoError(t, err)
 		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
@@ -264,7 +273,7 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		projName, err := tenant.ProjectNameFrom("noisy-proj")
 		require.NoError(t, err)
 
-		worker, alertManager := newWorker(projName.String())
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{WarningOnlyProjects: []string{projName.String()}}, nil)
 		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
 		require.NoError(t, err)
 		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
@@ -281,5 +290,142 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 
 		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, slaObj))
 		alertManager.AssertExpectations(t)
+	})
+
+	// Asia/Jakarta is UTC+7
+	criticalExpectation := func(alertManager *mockSLAAlertManager, severity scheduler.Severity) {
+		alertManager.On("SendOperatorSLAEvent", mock.MatchedBy(func(attr *scheduler.OperatorSLAAlertAttrs) bool {
+			return attr.Severity == severity.String()
+		})).Return(nil).Once()
+	}
+
+	t.Run("should cap when SLA deadline is at the inclusive end hour in the configured timezone", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects:  []string{projName.String()},
+			ActiveWindowTimezone: "Asia/Jakarta",
+			ActiveWindowEndHour:  10,
+		}, nil)
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		// 03:30 UTC = 10:30 WIB, still inside the inclusive end hour 10
+		slaObj := newSLA(projName)
+		slaObj.SLATime = time.Date(2026, 11, 11, 3, 30, 0, 0, time.UTC)
+		criticalExpectation(alertManager, scheduler.Warning)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, slaObj))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should keep CRITICAL when the SLA deadline is past the end hour", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects:  []string{projName.String()},
+			ActiveWindowTimezone: "Asia/Jakarta",
+			ActiveWindowEndHour:  10,
+		}, nil)
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		// 04:30 UTC = 11:30 WIB, past the end hour
+		slaObj := newSLA(projName)
+		slaObj.SLATime = time.Date(2026, 11, 11, 4, 30, 0, 0, time.UTC)
+		criticalExpectation(alertManager, scheduler.Critical)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, slaObj))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should cap when the job matches a full DNF label group", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		// (category=business-critical AND criticality=low) OR (team=dataplatform)
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects: []string{projName.String()},
+			JobLabels:           []string{"category_table_tag:business-critical,criticality:low", "team:dataplatform"},
+		}, map[string]string{"category_table_tag": "business-critical", "criticality": "low"})
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		criticalExpectation(alertManager, scheduler.Warning)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, newSLA(projName)))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should keep CRITICAL when the job matches only part of an AND group", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects: []string{projName.String()},
+			JobLabels: []string{
+				"category_table_tag:business-critical,critical_table_tag:sla-9am",
+				"category_table_tag:business-critical,critical_table_tag:sla-8am",
+			},
+		}, map[string]string{"category_table_tag": "business-critical"}) // no critical_table_tag
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		criticalExpectation(alertManager, scheduler.Critical)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, newSLA(projName)))
+		alertManager.AssertExpectations(t)
+	})
+
+	t.Run("should keep CRITICAL when the job matches none of the configured labels", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects: []string{projName.String()},
+			JobLabels:           []string{"team:dataplatform"},
+		}, map[string]string{"team": "analytics"})
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		criticalExpectation(alertManager, scheduler.Critical)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, newSLA(projName)))
+		alertManager.AssertExpectations(t)
+	})
+}
+
+func TestParseJobLabelGroups(t *testing.T) {
+	logger := log.NewNoop()
+
+	t.Run("should parse comma-separated AND groups and drop malformed pairs", func(t *testing.T) {
+		groups := parseJobLabelGroups(logger, []string{"team:dataplatform,criticality:low", "novalue", "empty:"})
+		require.Equal(t, [][]jobLabel{{
+			{key: "team", value: "dataplatform"},
+			{key: "criticality", value: "low"},
+		}}, groups)
+	})
+
+	t.Run("should keep only groups with at least one valid pair", func(t *testing.T) {
+		groups := parseJobLabelGroups(logger, []string{"a:1,broken,b:2", ",,"})
+		require.Equal(t, [][]jobLabel{
+			{{key: "a", value: "1"}, {key: "b", value: "2"}},
+		}, groups)
+	})
+
+	t.Run("should return no groups for empty input", func(t *testing.T) {
+		require.Empty(t, parseJobLabelGroups(logger, nil))
 	})
 }

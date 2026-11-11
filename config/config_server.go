@@ -161,6 +161,9 @@ type RootCauseAlertConfig struct {
 	// during root-cause identification; lower it if identify requests exhaust memory.
 	// 0 keeps the built-in default.
 	LineageBatchSize int `mapstructure:"lineage_batch_size" default:"50"`
+	// IncidentResolutionWindowHours is how far back the resolution pass looks for
+	// incidents it may flip to resolved.
+	IncidentResolutionWindowHours int `mapstructure:"incident_resolution_window_hours" default:"24"`
 }
 
 // AlertSuppressionConfig tunes which root-cause alerts are sent, while every incident

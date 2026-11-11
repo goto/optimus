@@ -338,7 +338,8 @@ func (s *JobRootCauseService) resolveUntouchedIncidents(ctx context.Context, req
 		}
 
 		// an empty fresh observation over the tracked incident resolves everything it
-		// still had active; the empty impact list clears the blast radius as well
+		// still had active. The impact rows are written back unchanged, so the incident
+		// keeps its last known blast radius for audit.
 		emptyObservation := &scheduler.SLABreachIncident{
 			ID:        trackedIncident.Incident.ID,
 			Key:       trackedIncident.Incident.Key,
@@ -347,7 +348,7 @@ func (s *JobRootCauseService) resolveUntouchedIncidents(ctx context.Context, req
 		}
 		merged := scheduler.MergeResolvedReasons(emptyObservation, trackedIncident.Incident)
 
-		if err := s.incidentRepo.UpsertIncident(ctx, merged, nil); err != nil {
+		if err := s.incidentRepo.UpsertIncident(ctx, merged, trackedIncident.Impacts); err != nil {
 			s.l.Error("failed to persist resolved SLA breach incident",
 				"project", merged.Key.ProjectName.String(),
 				"job", merged.Key.JobName.String(),

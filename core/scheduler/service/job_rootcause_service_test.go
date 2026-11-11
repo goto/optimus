@@ -1037,7 +1037,7 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
 			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
 
-		// an incident that was active before this tick, with a stale blast radius
+		// an incident that was active before this tick, with its last-known blast radius
 		offenderKey := scheduler.SLABreachIncidentKey{
 			ProjectName: tenant.ProjectName("p_offender"),
 			JobName:     "job_gone",
@@ -1065,7 +1065,7 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 				"the reason that vanished from every lineage is resolved")
 			assert.Equal(t, 3600, incident.MaxInducedDelaySeconds, "the high-water mark survives")
 			impacts := args.Get(2).([]scheduler.ImpactedJob)
-			assert.Empty(t, impacts, "the stale blast radius is cleared")
+			assert.Equal(t, tracked.Impacts, impacts, "the last-known blast radius is kept for audit")
 		})
 
 		notifier := &mockRootCauseNotifier{}

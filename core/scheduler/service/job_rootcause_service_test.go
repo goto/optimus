@@ -1102,6 +1102,124 @@ func TestJobRootCauseService_ResolutionPass(t *testing.T) {
 		repo.AssertExpectations(t)
 		notifier.AssertNotCalled(t, "SendRootCauseBreach")
 	})
+
+	t.Run("the resolution lookback follows the configured window", func(t *testing.T) {
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": healthyLineage}, nil).Once()
+		estimator := &mockRootCauseDurationEstimator{}
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
+
+		// a finished cause from before this tick: resolution must keep its finished flag
+		offenderKey := scheduler.SLABreachIncidentKey{
+			ProjectName: tenant.ProjectName("p_offender"),
+			JobName:     "job_gone",
+			ScheduledAt: base,
+		}
+		impacts := []scheduler.ImpactedJob{{ProjectName: projectName, JobName: "job_target", ScheduledAt: targetScheduledAt}}
+		tracked := &scheduler.SLABreachIncidentWithImpacts{
+			Incident: &scheduler.SLABreachIncident{
+				ID:  uuid.New(),
+				Key: offenderKey,
+				Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{
+					{Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 3600, IsJobFinished: true},
+				}},
+			},
+			Impacts: impacts,
+		}
+
+		repo := &mockIncidentRepository{}
+		// the exact since argument pins the configured 12-hour window
+		repo.On("GetActiveIncidents", ctx, referenceTime.Add(-12*time.Hour)).Return([]*scheduler.SLABreachIncidentWithImpacts{tracked}, nil).Once()
+		repo.On("UpsertIncident", ctx, mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			incident := args.Get(1).(*scheduler.SLABreachIncident)
+			assert.Equal(t, offenderKey, incident.Key)
+			assert.Equal(t, scheduler.ReasonStatusResolved, incident.Details.Reasons[0].Status)
+			assert.True(t, incident.Details.Reasons[0].IsJobFinished, "resolution must not lose the finished flag")
+		})
+
+		notifier := &mockRootCauseNotifier{}
+		svc := service.NewJobRootCauseService(
+			log.NewNoop(),
+			config.RootCauseAlertConfig{
+				RuntimeDelayThresholdMinutes:    30,
+				SchedulerDelayMinutesPerDepth:   2.5,
+				ThirdPartyDelayThresholdSeconds: 600,
+				IncidentResolutionWindowHours:   12,
+			},
+			rcPotentialConfig(),
+			detailsGetter,
+			lineageFetcher,
+			estimator,
+			nil,
+			rcScheduleChangeGetter(),
+			repo,
+			[]string{"dex"},
+			notifier,
+			&mockProjectTeamGetter{},
+		)
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_target"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+
+		assert.NoError(t, err)
+		assert.Empty(t, incidents)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("an unset resolution window keeps the built-in 24 hours", func(t *testing.T) {
+		detailsGetter := &mockRootCauseDetailsGetter{}
+		detailsGetter.On("GetJobs", ctx, projectName, []string{"job_target"}).Return([]*scheduler.JobWithDetails{jobWithDetails}, nil).Once()
+		lineageFetcher := &mockRootCauseLineageFetcher{}
+		lineageFetcher.On("GetJobLineage", ctx, mock.Anything, 2).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{"job_target": healthyLineage}, nil).Once()
+		estimator := &mockRootCauseDurationEstimator{}
+		estimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, mock.Anything).
+			Return(map[scheduler.JobName]*time.Duration{}, nil).Once()
+
+		repo := &mockIncidentRepository{}
+		repo.On("GetActiveIncidents", ctx, referenceTime.Add(-24*time.Hour)).Return(nil, nil).Once()
+
+		notifier := &mockRootCauseNotifier{}
+		svc := service.NewJobRootCauseService(
+			log.NewNoop(),
+			config.RootCauseAlertConfig{
+				RuntimeDelayThresholdMinutes:    30,
+				SchedulerDelayMinutesPerDepth:   2.5,
+				ThirdPartyDelayThresholdSeconds: 600,
+			},
+			rcPotentialConfig(),
+			detailsGetter,
+			lineageFetcher,
+			estimator,
+			nil,
+			rcScheduleChangeGetter(),
+			repo,
+			[]string{"dex"},
+			notifier,
+			&mockProjectTeamGetter{},
+		)
+
+		incidents, err := svc.IdentifySLABreachRootCause(ctx, service.RootCauseRequestConfig{
+			ProjectNames:         []tenant.ProjectName{projectName},
+			JobNames:             []scheduler.JobName{"job_target"},
+			ReferenceTime:        referenceTime,
+			EnableAlert:          true,
+			ScheduleRangeInHours: 2 * time.Hour,
+		})
+
+		assert.NoError(t, err)
+		assert.Empty(t, incidents)
+		repo.AssertExpectations(t)
+	})
 }
 
 func TestJobRootCauseService_FinishedCauseNotifiesOnce(t *testing.T) {

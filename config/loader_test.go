@@ -332,6 +332,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		DedupWindowMinutes:              60,
 		AlertSeverity:                   "WARNING",
 		LineageBatchSize:                50,
+		IncidentResolutionWindowHours:   24,
 		// platform teams default to empty: routing is disabled until configured
 	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{

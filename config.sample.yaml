@@ -183,6 +183,11 @@ alerting:
     # project; lower it (e.g. 25) if identify requests exhaust the server's memory.
     # 0 keeps the built-in default of 50.
     lineage_batch_size: 50
+    # IncidentResolutionWindowHours is how far back the resolution pass looks for
+    # incidents it may flip to resolved. Ideally it should stay longer than the longest gap
+    # between engine runs; a shorter window simply leaves older incidents unflipped
+    # (they age out of the active scan either way). 0 keeps the built-in default.
+    IncidentResolutionWindowHours: 24
     exclude_projects: []
 
 # SLA breach-detection background worker cadence

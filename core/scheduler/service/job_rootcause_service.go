@@ -47,13 +47,11 @@ type JobRootCauseService struct {
 	incidentRepo          scheduler.SLABreachIncidentRepository
 	publisher             *rootcause.Publisher
 	// alert routing
-	rootCauseNotifier RootCauseBreachNotifier
-	projectTeamGetter ProjectTeamGetter
-	teamCache         map[tenant.ProjectName]string
-	// lineageBatchSize caps how many targets get their upstream lineage built at once
-	// (root_cause_alert.lineage_batch_size, defaultLineageBatchSize when unset); keeps
-	// peak memory proportional to the batch
-	lineageBatchSize int
+	rootCauseNotifier        RootCauseBreachNotifier
+	projectTeamGetter        ProjectTeamGetter
+	teamCache                map[tenant.ProjectName]string
+	lineageBatchSize         int
+	incidentResolutionWindow time.Duration
 }
 
 // RootCauseBreachNotifier relays one root-cause breach alert; implemented by the
@@ -84,20 +82,25 @@ func NewJobRootCauseService(l log.Logger, alertConfig config.RootCauseAlertConfi
 	if batchSize <= 0 {
 		batchSize = defaultLineageBatchSize
 	}
+	resolutionWindow := time.Duration(alertConfig.IncidentResolutionWindowHours) * time.Hour
+	if resolutionWindow <= 0 {
+		resolutionWindow = defaultIncidentResolutionWindow
+	}
 	return &JobRootCauseService{
-		l:                     l,
-		config:                alertConfig,
-		potentialConfig:       potentialConfig,
-		jobDetailsGetter:      jobDetailsGetter,
-		jobLineageFetcher:     jobLineageFetcher,
-		durationEstimator:     durationEstimator,
-		startDelayEstimator:   startDelayEstimator,
-		scheduledChangeGetter: scheduledChangeGetter,
-		incidentRepo:          incidentRepo,
-		rootCauseNotifier:     rootCauseNotifier,
-		projectTeamGetter:     projectTeamGetter,
-		teamCache:             map[tenant.ProjectName]string{},
-		lineageBatchSize:      batchSize,
+		l:                        l,
+		config:                   alertConfig,
+		potentialConfig:          potentialConfig,
+		jobDetailsGetter:         jobDetailsGetter,
+		jobLineageFetcher:        jobLineageFetcher,
+		durationEstimator:        durationEstimator,
+		startDelayEstimator:      startDelayEstimator,
+		scheduledChangeGetter:    scheduledChangeGetter,
+		incidentRepo:             incidentRepo,
+		rootCauseNotifier:        rootCauseNotifier,
+		projectTeamGetter:        projectTeamGetter,
+		teamCache:                map[tenant.ProjectName]string{},
+		lineageBatchSize:         batchSize,
+		incidentResolutionWindow: resolutionWindow,
 		publisher: rootcause.NewPublisher(rootcause.PublisherConfig{
 			RuntimeDelayThreshold:       time.Duration(alertConfig.RuntimeDelayThresholdMinutes) * time.Minute,
 			SchedulerDelayPerDepth:      time.Duration(alertConfig.SchedulerDelayMinutesPerDepth * float64(time.Minute)),
@@ -272,10 +275,10 @@ func (s *JobRootCauseService) damperFactor(reqConfig RootCauseRequestConfig) sch
 	return damperFactor
 }
 
-// activeIncidentScanWindow is how far back the resolution pass looks for incidents that
-// were still active before this tick. It mirrors the subscriber's freshness window: older
-// rows are considered stale regardless and will age out anyway.
-const activeIncidentScanWindow = 24 * time.Hour
+// defaultIncidentResolutionWindow is the built-in resolution lookback when the config
+// leaves it unset. It mirrors the subscriber's freshness window: older rows are
+// considered stale regardless and will age out anyway.
+const defaultIncidentResolutionWindow = 24 * time.Hour
 
 // persistIncidents writes each fully assembled incident, then runs a resolution pass:
 // incidents that were active before this tick but received no fresh detection have their
@@ -326,7 +329,7 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig Ro
 // incidents are skipped: their own merge already flips partially-disappeared reasons.
 // Fully resolved incidents drop out of the active scan, so they are written exactly once.
 func (s *JobRootCauseService) resolveUntouchedIncidents(ctx context.Context, reqConfig RootCauseRequestConfig, freshKeys map[scheduler.SLABreachIncidentKey]bool) {
-	tracked, err := s.incidentRepo.GetActiveIncidents(ctx, reqConfig.ReferenceTime.Add(-activeIncidentScanWindow))
+	tracked, err := s.incidentRepo.GetActiveIncidents(ctx, reqConfig.ReferenceTime.Add(-s.incidentResolutionWindow))
 	if err != nil {
 		s.l.Error("failed to scan active incidents for resolution, deferring their flip to a later tick", "error", err)
 		return

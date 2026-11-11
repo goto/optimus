@@ -223,6 +223,9 @@ func (w *SLAWorker) withinActiveWindow(slaTime time.Time) bool {
 	if w.activeWindowEnd == 0 {
 		return true
 	}
+	if slaTime.IsZero() {
+		return false
+	}
 	hour := slaTime.In(w.activeWindowLoc).Hour()
 	return hour >= w.activeWindowStart && hour <= w.activeWindowEnd
 }

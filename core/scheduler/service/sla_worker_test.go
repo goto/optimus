@@ -322,6 +322,27 @@ func TestSLAWorkerOperatorSLASeverityCap(t *testing.T) {
 		alertManager.AssertExpectations(t)
 	})
 
+	t.Run("should keep CRITICAL when the SLA deadline is zero (fail open)", func(t *testing.T) {
+		projName, err := tenant.ProjectNameFrom("noisy-proj")
+		require.NoError(t, err)
+
+		worker, alertManager := newWorker(config.OperatorSLAMissConfig{
+			WarningOnlyProjects:  []string{projName.String()},
+			ActiveWindowTimezone: "Asia/Jakarta",
+			ActiveWindowEndHour:  10,
+		}, nil)
+		job, err := worker.jobRepo.GetJob(ctx, projName, jobName)
+		require.NoError(t, err)
+		job.Tenant, err = tenant.NewTenant(projName.String(), "ns1")
+		require.NoError(t, err)
+
+		slaObj := newSLA(projName) // SLATime left zero
+		criticalExpectation(alertManager, scheduler.Critical)
+
+		require.NoError(t, worker.SendOperatorSLAEvent(ctx, job, slaObj))
+		alertManager.AssertExpectations(t)
+	})
+
 	t.Run("should keep CRITICAL when the SLA deadline is past the end hour", func(t *testing.T) {
 		projName, err := tenant.ProjectNameFrom("noisy-proj")
 		require.NoError(t, err)

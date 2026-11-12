@@ -21,3 +21,8 @@ func TestIsRetryableTransportError(t *testing.T) {
 	assert.False(t, IsRetryableTransportError(context.Canceled))
 	assert.True(t, IsRetryableTransportError(&net.OpError{Err: errors.New("connection reset by peer")}))
 }
+
+func TestIsRetryableClientError(t *testing.T) {
+	assert.True(t, IsRetryableClientError(errors.New(`status code received 502 on calling http://airflow`)))
+	assert.False(t, IsRetryableClientError(errors.New("internal error")))
+}

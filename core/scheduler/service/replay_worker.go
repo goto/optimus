@@ -15,6 +15,7 @@ import (
 	"github.com/goto/optimus/core/tenant"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
@@ -189,9 +190,15 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		syncedRunStatus, err := w.FetchAndSyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
-			w.logger.Warn("[ReplayID: %s] unable to sync run status from scheduler, will retry on next interval: %s", replayID, err)
-			replayWorkerLoopDuration.WithLabelValues(replayID.String()).Set(time.Since(loopStartTime).Seconds())
-			continue
+			// Sequential replay must know the current partition state before triggering the next run.
+			// On transient Airflow errors, wait for the next poll instead of failing immediately.
+			if !replayWithRun.Replay.Config().Parallel && utils.IsRetryableClientError(err) {
+				w.logger.Warn("[ReplayID: %s] unable to sync run status from scheduler, will retry on next interval: %s", replayID, err)
+				replayWorkerLoopDuration.WithLabelValues(replayID.String()).Set(time.Since(loopStartTime).Seconds())
+				continue
+			}
+			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayID, err)
+			return err
 		}
 
 		// check if replay request is on termination state

@@ -189,8 +189,9 @@ func (w *ReplayWorker) startExecutionLoop(ctx context.Context, replayID uuid.UUI
 
 		syncedRunStatus, err := w.FetchAndSyncStatus(ctx, replayWithRun, jobCron)
 		if err != nil {
-			w.logger.Error("[ReplayID: %s] unable to get incoming runs: %s", replayID, err)
-			return err
+			w.logger.Warn("[ReplayID: %s] unable to sync run status from scheduler, will retry on next interval: %s", replayID, err)
+			replayWorkerLoopDuration.WithLabelValues(replayID.String()).Set(time.Since(loopStartTime).Seconds())
+			continue
 		}
 
 		// check if replay request is on termination state

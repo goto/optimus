@@ -554,7 +554,7 @@ func TestReplayWorker(t *testing.T) {
 			worker := service.NewReplayWorker(logger, replayRepository, jobRepository, sch, replayServerConfig, alertManager, tenantGetter)
 			worker.Execute(replayID, tnnt, jobAName)
 		})
-		t.Run("should able to update replay state as failed if unable to fetch job runs", func(t *testing.T) {
+		t.Run("should continue replay loop when unable to fetch job runs temporarily", func(t *testing.T) {
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -568,8 +568,7 @@ func TestReplayWorker(t *testing.T) {
 			defer tenantGetter.AssertExpectations(t)
 
 			runsPhase1 := []*scheduler.JobRunStatus{
-				{ScheduledAt: scheduledTime1, State: scheduler.StatePending},
-				{ScheduledAt: scheduledTime2, State: scheduler.StatePending},
+				{ScheduledAt: scheduledTime1, State: scheduler.StateSuccess},
 			}
 
 			replayID := uuid.New()
@@ -578,16 +577,17 @@ func TestReplayWorker(t *testing.T) {
 				Runs:   runsPhase1,
 			}
 
-			// loop 1
-			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, "started handling replay request").Return(nil).Once()
-
 			jobRepository.On("GetJobDetails", mock.Anything, projName, jobAName).Return(jobAWithDetails, nil).Twice()
 			tenantGetter.On("GetDetails", mock.Anything, tnnt).Return(tnntDetails, nil).Once()
 
-			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayReq, nil).Once()
-			errorMsg := "internal error"
-			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(nil, errors.New(errorMsg)).Once()
-			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, errorMsg).Return(nil).Once()
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, "started handling replay request").Return(nil).Once()
+			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayReq, nil).Twice()
+			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(nil, errors.New("internal error")).Once()
+			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(runsPhase1, nil).Once()
+			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
+
+			summaryMsg := "replay is finished with run status: success(1)"
+			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateSuccess, summaryMsg).Return(nil).Once()
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
 			defer alertManager.AssertExpectations(t)

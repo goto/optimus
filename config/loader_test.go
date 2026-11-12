@@ -363,6 +363,11 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		MaxConcurrentProjects: 5,
 		MaxAttempts:           3,
 	}
+
+	s.expectedServerConfig.AirflowClient = config.AirflowClientConfig{
+		RetryMax:       3,
+		RetryBackoffMs: int64(500),
+	}
 }
 
 func (*ConfigTestSuite) initServerConfigEnv() {

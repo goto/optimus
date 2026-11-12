@@ -1,4 +1,4 @@
-package airflow
+package airflow //nolint:testpackage
 
 import (
 	"context"

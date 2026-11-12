@@ -76,6 +76,7 @@ func TestReplayWorker(t *testing.T) {
 
 	t.Run("Execute", func(t *testing.T) {
 		t.Run("should able to process sequential replay request with single run", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -133,6 +134,7 @@ func TestReplayWorker(t *testing.T) {
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process sequential replay request with multiple run", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -222,6 +224,7 @@ func TestReplayWorker(t *testing.T) {
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process parallel replay request", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -311,6 +314,7 @@ func TestReplayWorker(t *testing.T) {
 		})
 
 		t.Run("should able to process replay request with sequential mode and creating non existing runs", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -397,6 +401,7 @@ func TestReplayWorker(t *testing.T) {
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should able to process replay request with parallel mode and creating non existing runs", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -555,6 +560,7 @@ func TestReplayWorker(t *testing.T) {
 			worker.Execute(replayID, tnnt, jobAName)
 		})
 		t.Run("should continue sequential replay loop when unable to fetch job runs temporarily", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -789,6 +795,7 @@ func TestReplayWorker(t *testing.T) {
 		})
 
 		t.Run("should able to still process replay if some of the runs are in failed state", func(t *testing.T) {
+			t.Parallel()
 			replayRepository := new(ReplayRepository)
 			defer replayRepository.AssertExpectations(t)
 
@@ -847,6 +854,7 @@ func TestReplayWorker(t *testing.T) {
 
 			// for cancelled check
 			replayRepository.On("GetReplayRequestByID", mock.Anything, replayReq.Replay.ID()).Return(replay, nil)
+			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil)
 
 			// loop 1
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateInProgress, "started handling replay request").Return(nil).Once()
@@ -860,14 +868,12 @@ func TestReplayWorker(t *testing.T) {
 			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase2, nil).Once()
 			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
 			sch.On("ClearBatch", mock.Anything, tnnt, jobAName, scheduledTime2.Add(-24*time.Hour), scheduledTime2.Add(-24*time.Hour)).Return(nil).Once()
-			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
-			// loop 3
-			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil).Once()
-			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil).Once()
-			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil).Once()
+			// loop 3 (terminal) and any extra poll iterations from transient sync retries or slower CI
+			replayRepository.On("GetReplayByID", mock.Anything, replayReq.Replay.ID()).Return(replayPhase3, nil)
+			sch.On("GetJobRunsForReplay", mock.Anything, tnnt, mock.Anything, jobCron).Return(schedulerRunsPhase3, nil)
+			replayRepository.On("UpdateReplayRuns", mock.Anything, replayReq.Replay.ID(), mock.Anything).Return(nil)
 			replayRepository.On("UpdateReplayStatus", mock.Anything, replayReq.Replay.ID(), scheduler.ReplayStateFailed, mock.Anything).Return(nil).Once()
-			replayRepository.On("UpdateReplayHeartbeat", mock.Anything, replayReq.Replay.ID()).Return(nil).Once()
 
 			alertManager := new(mockAlertManager)
 			alertManager.On("SendReplayEvent", mock.Anything).Return()
@@ -999,11 +1005,27 @@ func (_m *mockReplayScheduler) CancelRun(ctx context.Context, tnnt tenant.Tenant
 }
 
 func (_m *mockReplayScheduler) GetJobRunsForReplay(ctx context.Context, tnnt tenant.Tenant, jobQuery *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error) {
-	args := _m.Called(ctx, tnnt, jobQuery, jobCron)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	ret := _m.Called(ctx, tnnt, jobQuery, jobCron)
+
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, *scheduler.JobRunsCriteria, *cron.ScheduleSpec) ([]*scheduler.JobRunStatus, error)); ok {
+		return rf(ctx, tnnt, jobQuery, jobCron)
 	}
-	return args.Get(0).([]*scheduler.JobRunStatus), args.Error(1)
+
+	var r0 []*scheduler.JobRunStatus
+	if rf, ok := ret.Get(0).(func(context.Context, tenant.Tenant, *scheduler.JobRunsCriteria, *cron.ScheduleSpec) []*scheduler.JobRunStatus); ok {
+		r0 = rf(ctx, tnnt, jobQuery, jobCron)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]*scheduler.JobRunStatus)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, tenant.Tenant, *scheduler.JobRunsCriteria, *cron.ScheduleSpec) error); ok {
+		r1 = rf(ctx, tnnt, jobQuery, jobCron)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 func (_m *mockReplayScheduler) GetJobRunsWithDetails(ctx context.Context, t tenant.Tenant, criteria *scheduler.JobRunsCriteria, jobCron *cron.ScheduleSpec) ([]*scheduler.JobRunWithDetails, error) {

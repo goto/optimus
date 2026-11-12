@@ -65,6 +65,19 @@ alerting:
   # regardless of job-spec severity; CRITICAL loses the production label (no PD alert).
   operator_sla_miss:
     warning_only_projects: []
+    # the cap applies only when the alert's SLA deadline falls within this daily window
+    # (both ends inclusive, local time); end_hour 0 disables windowing
+    active_window_timezone: Asia/Jakarta
+    active_window_start_hour: 0
+    active_window_end_hour: 10
+    # narrow the cap to jobs matching this label filter: each entry is a comma-separated
+    # AND of job-spec labels (key:value), and the job is capped if ANY entry fully matches.
+    # empty means every job of the listed projects.
+    # example: we want filter by labelA and labelB with value (tag1 AND tag2) OR (tag3 AND tag4):
+    # job_labels:
+    #   - "labelA:tag1,labelB:tag2"
+    #   - "labelA:tag3,labelB:tag4"
+    job_labels: []
   # shared by any SLA path that classifies why a job is late
   root_cause:
     # sensor wait before this UTC hour is not counted as third-party induced delay.

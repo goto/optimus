@@ -110,6 +110,15 @@ type AlertingConfig struct {
 type OperatorSLAMissConfig struct {
 	// WarningOnlyProjects caps these projects' task/sensor/hook duration alerts at WARNING;
 	WarningOnlyProjects []string `mapstructure:"warning_only_projects"`
+	// The cap applies only when the alert's SLA deadline falls within this daily
+	// window (both ends inclusive, measured in ActiveWindowTimezone). An end hour
+	// of 0 disables windowing, so the cap applies around the clock.
+	ActiveWindowTimezone  string `mapstructure:"active_window_timezone" default:"Asia/Jakarta"`
+	ActiveWindowStartHour int    `mapstructure:"active_window_start_hour" default:"0"`
+	ActiveWindowEndHour   int    `mapstructure:"active_window_end_hour" default:"0"`
+	// JobLabels narrows the cap to jobs carrying at least one of these job-spec
+	// labels, written as key:value. Empty means every job of the listed projects.
+	JobLabels []string `mapstructure:"job_labels"`
 }
 
 // RootCauseConfig tunes how late jobs are classified (RUNNING_LONG, STARTED_LATE,

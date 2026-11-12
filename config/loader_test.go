@@ -335,6 +335,9 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		IncidentResolutionWindowHours:   24,
 		// platform teams default to empty: routing is disabled until configured
 	}
+	s.expectedServerConfig.Alerting.OperatorSLAMiss = config.OperatorSLAMissConfig{
+		ActiveWindowTimezone: "Asia/Jakarta",
+	}
 	s.expectedServerConfig.JobExpectatorConfig = config.JobExpectatorConfig{
 		BufferDurationInMinutes: 10,
 		DurationEstimatorConfig: config.DurationEstimatorConfig{

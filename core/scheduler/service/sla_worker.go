@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 
 type JobRepo interface {
 	GetJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Job, error)
+	GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error)
 }
 
 type OperatorSLARepo interface {
@@ -24,6 +26,12 @@ type OperatorSLARepo interface {
 
 type RunScheduler interface {
 	GetOperatorInstance(ctx context.Context, tnnt tenant.Tenant, jobName scheduler.JobName, jobRunID, operatorName string) (*scheduler.OperatorRunInstance, error)
+}
+
+// jobLabel is one key:value pair parsed from alerting.operator_sla_miss.job_labels
+type jobLabel struct {
+	key   string
+	value string
 }
 
 type SLAWorker struct {
@@ -36,6 +44,10 @@ type SLAWorker struct {
 	scheduler           RunScheduler
 	logger              log.Logger
 	warningOnlyProjects map[string]struct{}
+	jobLabelGroups      [][]jobLabel
+	activeWindowLoc     *time.Location
+	activeWindowStart   int
+	activeWindowEnd     int
 }
 
 func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo OperatorSLARepo, jobRepo JobRepo,
@@ -46,6 +58,18 @@ func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo 
 	for _, projectName := range operatorSLAMissConfig.WarningOnlyProjects {
 		warningOnlyProjects[projectName] = struct{}{}
 	}
+
+	loc, err := time.LoadLocation(operatorSLAMissConfig.ActiveWindowTimezone)
+	if err != nil {
+		if operatorSLAMissConfig.ActiveWindowTimezone != "" {
+			logger.Warn("invalid active_window_timezone %s in alerting.operator_sla_miss, falling back to UTC", operatorSLAMissConfig.ActiveWindowTimezone)
+		}
+		loc = time.UTC
+	}
+	if end := operatorSLAMissConfig.ActiveWindowEndHour; end != 0 && end < operatorSLAMissConfig.ActiveWindowStartHour {
+		logger.Warn("active window end hour %d is before start hour %d in alerting.operator_sla_miss, the window never matches (cross-midnight windows are not supported)", end, operatorSLAMissConfig.ActiveWindowStartHour)
+	}
+
 	return &SLAWorker{
 		logger:              logger,
 		alertManager:        alertManager,
@@ -56,7 +80,32 @@ func NewSLAWorker(logger log.Logger, alertManager AlertManager, operatorSLARepo 
 		tenantService:       tenantService,
 		scheduler:           scheduler,
 		warningOnlyProjects: warningOnlyProjects,
+		jobLabelGroups:      parseJobLabelGroups(logger, operatorSLAMissConfig.JobLabels),
+		activeWindowLoc:     loc,
+		activeWindowStart:   operatorSLAMissConfig.ActiveWindowStartHour,
+		activeWindowEnd:     operatorSLAMissConfig.ActiveWindowEndHour,
 	}
+}
+
+// parseJobLabelGroups reads job_labels each entry is a comma-separated AND of "key:value" pairs, entries are OR.
+// Entries with no valid pair are dropped with a warning.
+func parseJobLabelGroups(logger log.Logger, raw []string) [][]jobLabel {
+	var groups [][]jobLabel
+	for _, entry := range raw {
+		var group []jobLabel
+		for _, pair := range strings.Split(entry, ",") {
+			key, value, found := strings.Cut(strings.TrimSpace(pair), ":")
+			if !found || key == "" || value == "" {
+				logger.Warn("ignoring malformed job label %q in alerting.operator_sla_miss.job_labels, expected key:value", pair)
+				continue
+			}
+			group = append(group, jobLabel{key: key, value: value})
+		}
+		if len(group) > 0 {
+			groups = append(groups, group)
+		}
+	}
+	return groups
 }
 
 func (w *SLAWorker) ScheduleSLAHandling(ctx context.Context, interval, processDuration time.Duration) {
@@ -141,21 +190,75 @@ func (w *SLAWorker) SendOperatorSLAEvent(ctx context.Context, job *scheduler.Job
 		}
 	}
 
-	alertAttr := getAlertAttributes(tenantWithDetails, alertTeam, w.cappedSeverity(job.Tenant.ProjectName().String(), alertSeverity).String(), alertMsg, operatorRun.Status, slaObj)
+	alertAttr := getAlertAttributes(tenantWithDetails, alertTeam, w.cappedSeverity(ctx, job, slaObj, alertSeverity).String(), alertMsg, operatorRun.Status, slaObj)
 	w.alertManager.SendOperatorSLAEvent(alertAttr)
 	return nil
 }
 
-// cappedSeverity downgrades CRITICAL to WARNING for projects listed in alerting.operator_sla_miss.
-func (w *SLAWorker) cappedSeverity(projectName string, severity scheduler.Severity) scheduler.Severity {
+// cappedSeverity downgrades CRITICAL to WARNING for projects listed in alerting.operator_sla_miss,
+// when the alert's SLA deadline falls inside the active window and the job matches the label filter.
+func (w *SLAWorker) cappedSeverity(ctx context.Context, job *scheduler.Job, slaObj *scheduler.OperatorsSLA, severity scheduler.Severity) scheduler.Severity {
 	if severity != scheduler.Critical {
 		return severity
 	}
+	projectName := job.Tenant.ProjectName().String()
 	if _, ok := w.warningOnlyProjects[projectName]; !ok {
+		return severity
+	}
+	if !w.withinActiveWindow(slaObj.SLATime) {
+		w.logger.Debug("operator SLA miss cap skipped, SLA deadline outside active window, project: %s, job: %s, sla_time: %s", projectName, slaObj.JobName, slaObj.SLATime)
+		return severity
+	}
+	if !w.matchesJobLabels(ctx, job) {
+		w.logger.Debug("operator SLA miss cap skipped, job labels do not match the filter, project: %s, job: %s", projectName, slaObj.JobName)
 		return severity
 	}
 	w.logger.Info("operator SLA miss alert severity capped to WARNING by project config, project: %s", projectName)
 	return scheduler.Warning
+}
+
+// withinActiveWindow reports whether the SLA deadline's local hour falls inside the
+// configured daily window (both ends inclusive). An end hour of 0 disables windowing.
+func (w *SLAWorker) withinActiveWindow(slaTime time.Time) bool {
+	if w.activeWindowEnd == 0 {
+		return true
+	}
+	if slaTime.IsZero() {
+		return false
+	}
+	hour := slaTime.In(w.activeWindowLoc).Hour()
+	return hour >= w.activeWindowStart && hour <= w.activeWindowEnd
+}
+
+// matchesJobLabels reports whether the job fully matches any DNF label group
+// (labels within a group are ANDed, groups are ORed). An empty filter matches
+// everything; a lookup failure fails open (no cap).
+func (w *SLAWorker) matchesJobLabels(ctx context.Context, job *scheduler.Job) bool {
+	if len(w.jobLabelGroups) == 0 {
+		return true
+	}
+	details, err := w.jobRepo.GetJobDetails(ctx, job.Tenant.ProjectName(), job.Name)
+	if err != nil {
+		w.logger.Error("failed to fetch job details for label filter, keeping job-spec severity, job: %s, error: %v", job.Name.String(), err)
+		return false
+	}
+	if details == nil || details.JobMetadata == nil {
+		return false
+	}
+	labels := details.JobMetadata.Labels
+	for _, group := range w.jobLabelGroups {
+		matched := true
+		for _, l := range group {
+			if labels[l.key] != l.value {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *SLAWorker) process(ctx context.Context, signature string, processDuration time.Duration) {

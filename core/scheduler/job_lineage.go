@@ -123,20 +123,178 @@ type JobLineageSummary struct {
 	SLA              SLAConfig
 	Window           *window.Config
 
-	// JobRuns contain the mapping of downstream's job name to their respective job run summaries
-	JobRuns map[JobName]*JobRunSummary
+	// targetRun holds the root job's own run when this node is the lineage root.
+	targetRun *JobRunSummary
+
+	// runsByDownstream maps each immediate downstream run (JobName, ScheduledAt UTC)
+	// to the upstream run it depends on, avoiding collisions when a downstream job
+	// appears at multiple scheduled times in the same lineage.
+	runsByDownstream map[JobRunKey]*JobRunSummary
 }
 
-func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {
-	return getRunForJob(jobName, j.JobRuns)
+// RecordTargetRun attaches the root job's own run summary to this node.
+func (j *JobLineageSummary) RecordTargetRun(run *JobRunSummary) {
+	if j == nil {
+		return
+	}
+	j.targetRun = run
 }
 
-func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSummary {
-	if run, exists := jobRuns[jobName]; exists {
+// GetTargetRun returns the run summary when this node is the lineage root.
+func (j *JobLineageSummary) GetTargetRun() *JobRunSummary {
+	if j == nil {
+		return nil
+	}
+	if j.targetRun != nil {
+		return j.targetRun
+	}
+	if run, exists := j.runsByDownstream[JobRunKey{JobName: j.JobName}]; exists {
 		return run
 	}
-
 	return nil
+}
+
+// TargetRunKey returns the normalized UTC JobRunKey identifying this node when it is the lineage root.
+func (j *JobLineageSummary) TargetRunKey() JobRunKey {
+	if j == nil {
+		return JobRunKey{}
+	}
+	if targetRun := j.GetTargetRun(); targetRun != nil {
+		return NewJobRunKey(j.JobName, targetRun.ScheduledAt)
+	}
+	return NewJobRunKey(j.JobName, time.Time{})
+}
+
+// RecordUpstreamRun records the run summary of this upstream node depended on by downstream.
+func (j *JobLineageSummary) RecordUpstreamRun(downstream JobRunKey, run *JobRunSummary) {
+	if j == nil {
+		return
+	}
+	if j.runsByDownstream == nil {
+		j.runsByDownstream = make(map[JobRunKey]*JobRunSummary)
+	}
+	j.runsByDownstream[NewJobRunKey(downstream.JobName, downstream.ScheduledAt)] = run
+}
+
+// GetRunForDownstream returns the upstream run associated with the exact immediate downstream run.
+func (j *JobLineageSummary) GetRunForDownstream(downstream JobRunKey) *JobRunSummary {
+	if j == nil || len(j.runsByDownstream) == 0 {
+		return nil
+	}
+	return j.runsByDownstream[NewJobRunKey(downstream.JobName, downstream.ScheduledAt)]
+}
+
+// ResolveUpstreamRun returns the upstream run associated with the immediate downstream run.
+func (j *JobLineageSummary) ResolveUpstreamRun(downstream JobRunKey) *JobRunSummary {
+	return j.GetRunForDownstream(downstream)
+}
+
+// DownstreamRunCount returns the number of distinct immediate downstream run edges recorded on this node.
+func (j *JobLineageSummary) DownstreamRunCount() int {
+	if j == nil {
+		return 0
+	}
+	return len(j.runsByDownstream)
+}
+
+// HasRuns reports whether any run summary has been attached to this node.
+func (j *JobLineageSummary) HasRuns() bool {
+	if j == nil {
+		return false
+	}
+	return j.targetRun != nil || len(j.runsByDownstream) > 0
+}
+
+// AllRuns returns every distinct run summary attached to this node, sorted by ScheduledAt.
+func (j *JobLineageSummary) AllRuns() []*JobRunSummary {
+	if j == nil {
+		return nil
+	}
+	seen := make(map[time.Time]*JobRunSummary)
+	j.ForEachRun(func(run *JobRunSummary) {
+		key := run.ScheduledAt.UTC()
+		if _, exists := seen[key]; !exists {
+			seen[key] = run
+		}
+	})
+	runs := make([]*JobRunSummary, 0, len(seen))
+	for _, run := range seen {
+		runs = append(runs, run)
+	}
+	sort.Slice(runs, func(i, k int) bool {
+		return runs[i].ScheduledAt.Before(runs[k].ScheduledAt)
+	})
+	return runs
+}
+
+// ForEachRun visits every non-nil run summary stored on this node at most once per pointer.
+func (j *JobLineageSummary) ForEachRun(fn func(*JobRunSummary)) {
+	if j == nil || fn == nil {
+		return
+	}
+	visited := make(map[*JobRunSummary]struct{})
+	visit := func(run *JobRunSummary) {
+		if run == nil {
+			return
+		}
+		if _, seen := visited[run]; seen {
+			return
+		}
+		visited[run] = struct{}{}
+		fn(run)
+	}
+	visit(j.targetRun)
+	for _, run := range j.runsByDownstream {
+		visit(run)
+	}
+}
+
+// CloneMetadata returns a shallow structural copy of this node with empty run maps and pre-sized Upstreams.
+func (j *JobLineageSummary) CloneMetadata() *JobLineageSummary {
+	if j == nil {
+		return nil
+	}
+	return &JobLineageSummary{
+		JobName:          j.JobName,
+		Tenant:           j.Tenant,
+		IsEnabled:        j.IsEnabled,
+		Window:           j.Window,
+		ScheduleInterval: j.ScheduleInterval,
+		SLA:              j.SLA,
+		Upstreams:        make([]*JobLineageSummary, len(j.Upstreams)),
+	}
+}
+
+// RebindRuns populates this node's run references from src, substituting enriched run details
+// keyed by ScheduledAt UTC when jobRunsBySchedule is non-nil.
+func (j *JobLineageSummary) RebindRuns(src *JobLineageSummary, jobRunsBySchedule map[time.Time]*JobRunSummary) {
+	if j == nil || src == nil {
+		return
+	}
+	if jobRunsBySchedule == nil {
+		j.targetRun = src.targetRun
+		if len(src.runsByDownstream) > 0 {
+			j.runsByDownstream = make(map[JobRunKey]*JobRunSummary, len(src.runsByDownstream))
+			for k, v := range src.runsByDownstream {
+				j.runsByDownstream[k] = v
+			}
+		}
+		return
+	}
+
+	if src.targetRun != nil {
+		if detailed, ok := jobRunsBySchedule[src.targetRun.ScheduledAt.UTC()]; ok {
+			j.targetRun = detailed
+		}
+	}
+	if len(src.runsByDownstream) > 0 {
+		j.runsByDownstream = make(map[JobRunKey]*JobRunSummary, len(src.runsByDownstream))
+		for downstreamKey, jobRun := range src.runsByDownstream {
+			if detailed, ok := jobRunsBySchedule[jobRun.ScheduledAt.UTC()]; ok {
+				j.runsByDownstream[downstreamKey] = detailed
+			}
+		}
+	}
 }
 
 // ClipLineageRunsToReferenceTime walks the lineage and hides any observed run timestamp that
@@ -154,9 +312,9 @@ func clipLineageNode(node *JobLineageSummary, referenceTime time.Time, visited m
 	}
 	visited[node] = true
 
-	for _, run := range node.JobRuns {
+	node.ForEachRun(func(run *JobRunSummary) {
 		clipJobRunToReferenceTime(run, referenceTime)
-	}
+	})
 	for _, upstream := range node.Upstreams {
 		clipLineageNode(upstream, referenceTime, visited)
 	}
@@ -341,7 +499,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 		TotalNodes:       walk.TotalNodes,
 		Truncated:        walk.Truncated,
 	}
-	if targetRun := j.GetRunForJob(j.JobName); targetRun != nil {
+	if targetRun := j.GetTargetRun(); targetRun != nil {
 		lineage.ScheduledAt = targetRun.ScheduledAt
 	}
 
@@ -378,17 +536,21 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 
 	type queueItem struct {
 		lineage *JobLineageSummary
-		parent  JobName
 		from    *JobRunKey
 		depth   int
 	}
 
-	queue := []queueItem{{lineage: j, parent: j.JobName, depth: 0}}
+	queue := []queueItem{{lineage: j, depth: 0}}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 
-		run := current.lineage.GetRunForJob(current.parent)
+		var run *JobRunSummary
+		if current.from == nil {
+			run = current.lineage.GetTargetRun()
+		} else {
+			run = current.lineage.GetRunForDownstream(*current.from)
+		}
 		if run == nil {
 			continue
 		}
@@ -431,10 +593,9 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			continue
 		}
 
-		for _, upstream := range SelectUpstreams(current.lineage, opts.TopUpstreamsPerJob) {
+		for _, upstream := range SelectUpstreamsForRun(current.lineage, key, opts.TopUpstreamsPerJob) {
 			queue = append(queue, queueItem{
 				lineage: upstream,
-				parent:  current.lineage.JobName,
 				from:    &key,
 				depth:   current.depth + 1,
 			})
@@ -457,7 +618,15 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 // them; otherwise it is the N that finished last, which for a completed lineage are the runs
 // that actually held the job up
 func SelectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
-	if topN <= 0 || len(job.Upstreams) <= topN {
+	return SelectUpstreamsForRun(job, job.TargetRunKey(), topN)
+}
+
+// SelectUpstreamsForRun ranks job's upstreams for the specific downstream run key.
+func SelectUpstreamsForRun(job *JobLineageSummary, parentKey JobRunKey, topN int) []*JobLineageSummary {
+	if job == nil || topN <= 0 || len(job.Upstreams) <= topN {
+		if job == nil {
+			return nil
+		}
 		return job.Upstreams
 	}
 
@@ -465,7 +634,7 @@ func SelectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
 	copy(ranked, job.Upstreams)
 
 	sort.SliceStable(ranked, func(i, k int) bool {
-		iRun, kRun := ranked[i].GetRunForJob(job.JobName), ranked[k].GetRunForJob(job.JobName)
+		iRun, kRun := ranked[i].GetRunForDownstream(parentKey), ranked[k].GetRunForDownstream(parentKey)
 
 		// runs with no finish time cannot be ranked on one, so they sort after those that have
 		// one, newest first

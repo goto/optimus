@@ -67,15 +67,20 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 			JobName:   "job-B",
 			IsEnabled: true,
 			Tenant:    tnnt,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": upstreamRun},
 		}
-		return &scheduler.JobLineageSummary{
+		var sched time.Time
+		if targetRun != nil {
+			sched = targetRun.ScheduledAt
+		}
+		upstream.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", sched), upstreamRun)
+		root := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
 			Tenant:    tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{upstream},
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": targetRun},
 		}
+		root.RecordTargetRun(targetRun)
+		return root
 	}
 
 	jobDurations := map[scheduler.JobName]*time.Duration{
@@ -232,21 +237,21 @@ func TestIdentifier_EscalatesStartedLate(t *testing.T) {
 			JobName:   "job-C",
 			IsEnabled: true,
 			Tenant:    tnnt,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": blocked},
 		}
+		jobC.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), blocked)
 		jobB := &scheduler.JobLineageSummary{
 			JobName:   "job-B",
 			IsEnabled: true,
 			Tenant:    tnnt,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": runningLong},
 		}
+		jobB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), runningLong)
 		lineage := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
 			Tenant:    tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobB, jobC},
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": targetRun},
 		}
+		lineage.RecordTargetRun(targetRun)
 		durations := map[scheduler.JobName]*time.Duration{
 			"job-A": dur(10 * time.Minute),
 			"job-B": dur(5 * time.Minute),
@@ -345,17 +350,15 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		// own explanationsFor call matches directly, no escalation needed.
 		upstream := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt, JobStatus: scheduler.StateFailed.String(), JobEndTime: at(1)},
-			},
 		}
+		upstream.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt, JobStatus: scheduler.StateFailed.String(), JobEndTime: at(1),
+		})
 		target := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{upstream},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		target.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobDurations := map[scheduler.JobName]*time.Duration{"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute)}
 		identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
@@ -375,30 +378,24 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		// has no explanation of its own - it must escalate past itself to find job-C.
 		jobC := &scheduler.JobLineageSummary{
 			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-B": {
-					ScheduledAt:   scheduledAt,
-					TaskStartTime: at(2),
-					TaskEndTime:   at(5),
-					JobEndTime:    at(5),
-					JobStatus:     scheduler.StateFailed.String(),
-				},
-			},
 		}
+		jobC.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", scheduledAt), &scheduler.JobRunSummary{
+			ScheduledAt:   scheduledAt,
+			TaskStartTime: at(2),
+			TaskEndTime:   at(5),
+			JobEndTime:    at(5),
+			JobStatus:     scheduler.StateFailed.String(),
+		})
 		jobB := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobC},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt}, // no run data at all: genuinely still waiting
-			},
 		}
+		jobB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{ScheduledAt: scheduledAt}) // no run data at all: genuinely still waiting
 		jobA := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobB},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		jobA.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobDurations := map[scheduler.JobName]*time.Duration{
 			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
 		}
@@ -422,24 +419,20 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		// no overrun): there is nothing abnormal to find on the climb.
 		jobC := &scheduler.JobLineageSummary{
 			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-B": {ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3)},
-			},
 		}
+		jobC.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", scheduledAt), &scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3),
+		})
 		jobB := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobC},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		jobB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobA := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobB},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		jobA.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobDurations := map[scheduler.JobName]*time.Duration{
 			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
 		}
@@ -460,24 +453,20 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		// detector classified the cause.
 		jobC := &scheduler.JobLineageSummary{
 			JobName: "job-C", IsEnabled: true, Tenant: tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-B": {ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3)},
-			},
 		}
+		jobC.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", scheduledAt), &scheduler.JobRunSummary{
+			ScheduledAt: scheduledAt, TaskStartTime: at(0), TaskEndTime: at(3), JobEndTime: at(3),
+		})
 		jobB := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobC},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		jobB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobA := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true, Tenant: tnnt,
 			Upstreams: []*scheduler.JobLineageSummary{jobB},
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt},
-			},
 		}
+		jobA.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobDurations := map[scheduler.JobName]*time.Duration{
 			"job-A": dur(10 * time.Minute), "job-B": dur(5 * time.Minute), "job-C": dur(5 * time.Minute),
 		}
@@ -493,5 +482,108 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		wantSafeStart := scheduledAt.Add(8 * time.Minute)
 		assert.Equal(t, wantSafeStart, *cause.Evidence.LatestSafeStartAt)
 		assert.Equal(t, referenceTime.Sub(wantSafeStart), cause.Evidence.InducedDelay)
+	})
+
+	t.Run("escalates along the matching per-run upstream edge when an intermediate job has runs at two schedules", func(t *testing.T) {
+		// Root -> {A, C} -> B -> D:
+		//   A -> B@7am (not started, safe start past ref) -> D@6am (failed!)
+		//   C -> B@3am (finished) -> D@2am (finished!)
+		// Root is past safe start waiting on A? Or Root -> A (not started) -> B@7am (not started) -> D@6am (failed).
+		// Wait: let's have A (not started, waiting on B@7am) where A's safe start is before ref,
+		// C finished early, B@3am -> D@2am finished early, while B@7am is not started waiting on D@6am (failed).
+		// Identify must follow A -> B@7am -> D@6am and report D as ReasonFailed (not stop at B or read D@2am).
+		t09 := scheduledAt
+		t08 := scheduledAt.Add(-1 * time.Hour)
+		t07 := scheduledAt.Add(-2 * time.Hour)
+		t06 := scheduledAt.Add(-3 * time.Hour)
+		t03 := scheduledAt.Add(-6 * time.Hour)
+		t02 := scheduledAt.Add(-7 * time.Hour)
+		endAt := func(tm time.Time) *time.Time { return &tm }
+		lateRef := t09.Add(40 * time.Minute)
+		slaTarget := t09.Add(45 * time.Minute)
+
+		nodeD := &scheduler.JobLineageSummary{JobName: "job-D", IsEnabled: true, Tenant: tnnt}
+		nodeD.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", t07), &scheduler.JobRunSummary{
+			JobName:     "job-D",
+			ScheduledAt: t06,
+			JobStatus:   scheduler.StateFailed.String(),
+			TaskEndTime: endAt(t06.Add(5 * time.Minute)),
+			JobEndTime:  endAt(t06.Add(5 * time.Minute)),
+		})
+		nodeD.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", t03), &scheduler.JobRunSummary{
+			JobName:     "job-D",
+			ScheduledAt: t02,
+			JobStatus:   scheduler.StateSuccess.String(),
+			TaskEndTime: endAt(t02.Add(5 * time.Minute)),
+			JobEndTime:  endAt(t02.Add(5 * time.Minute)),
+		})
+
+		nodeB := &scheduler.JobLineageSummary{
+			JobName:   "job-B",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{nodeD},
+		}
+		nodeB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", t08), &scheduler.JobRunSummary{
+			JobName: "job-B", ScheduledAt: t07,
+		})
+		nodeB.RecordUpstreamRun(scheduler.NewJobRunKey("job-C", t08), &scheduler.JobRunSummary{
+			JobName:     "job-B",
+			ScheduledAt: t03,
+			JobStatus:   scheduler.StateSuccess.String(),
+			TaskEndTime: endAt(t03.Add(5 * time.Minute)),
+			JobEndTime:  endAt(t03.Add(5 * time.Minute)),
+		})
+
+		nodeA := &scheduler.JobLineageSummary{
+			JobName:   "job-A",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{nodeB},
+		}
+		nodeA.RecordUpstreamRun(scheduler.NewJobRunKey("job-root", t09), &scheduler.JobRunSummary{
+			JobName: "job-A", ScheduledAt: t08,
+		})
+
+		nodeC := &scheduler.JobLineageSummary{
+			JobName:   "job-C",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{nodeB},
+		}
+		nodeC.RecordUpstreamRun(scheduler.NewJobRunKey("job-root", t09), &scheduler.JobRunSummary{
+			JobName:     "job-C",
+			ScheduledAt: t08,
+			JobStatus:   scheduler.StateSuccess.String(),
+			TaskEndTime: endAt(t08.Add(5 * time.Minute)),
+			JobEndTime:  endAt(t08.Add(5 * time.Minute)),
+		})
+
+		root := &scheduler.JobLineageSummary{
+			JobName:   "job-root",
+			IsEnabled: true,
+			Tenant:    tnnt,
+			Upstreams: []*scheduler.JobLineageSummary{nodeA, nodeC},
+		}
+		root.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-root", ScheduledAt: t09})
+
+		durations := map[scheduler.JobName]*time.Duration{
+			"job-root": dur(10 * time.Minute),
+			"job-A":    dur(10 * time.Minute),
+			"job-C":    dur(10 * time.Minute),
+			"job-B":    dur(10 * time.Minute),
+			"job-D":    dur(10 * time.Minute),
+		}
+		id := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+		causes, _ := id.Identify(context.Background(), root, durations, nil, &slaTarget, nil, damper, lateRef)
+
+		if assert.Len(t, causes, 1) {
+			cause, ok := causes["job-D"]
+			if assert.True(t, ok, "expected root cause job-D via A -> B@7am -> D@6am, got: %+v", causes) {
+				assert.Equal(t, scheduler.ReasonUpstreamFailed, cause.Reason)
+				assert.Equal(t, t06, cause.JobRun.ScheduledAt)
+			}
+		}
 	})
 }

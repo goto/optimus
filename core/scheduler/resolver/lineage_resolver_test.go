@@ -231,11 +231,13 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameA, result.JobName)
 		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
 		assert.EqualValues(t, result.Window, &yestWindowCfg)
-		assert.Equal(t, len(result.JobRuns), 1)
-		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameA, result.JobRuns[jobNameA].JobName)
-		assert.Equal(t, 1, result.JobRuns[jobNameA].TaskAttempts)
-		assert.Equal(t, 1, result.JobRuns[jobNameA].HookAttempts)
+		rootRun := result.GetTargetRun()
+		if assert.NotNil(t, rootRun) {
+			assert.Equal(t, scheduledTime, rootRun.ScheduledAt)
+			assert.Equal(t, jobNameA, rootRun.JobName)
+			assert.Equal(t, 1, rootRun.TaskAttempts)
+			assert.Equal(t, 1, rootRun.HookAttempts)
+		}
 
 		// assert job B results
 		assert.Len(t, result.Upstreams, 1)
@@ -243,12 +245,15 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameB, upstreamB.JobName)
 		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
-		assert.Len(t, upstreamB.JobRuns, 1)
+		assert.Equal(t, 1, upstreamB.DownstreamRunCount())
 		expectedBSchedule := jobBExpectedSchedules[0]
-		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
-		assert.Equal(t, 2, upstreamB.JobRuns[jobNameA].TaskAttempts)
-		assert.Equal(t, 1, upstreamB.JobRuns[jobNameA].HookAttempts)
+		runB := upstreamB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduledTime))
+		if assert.NotNil(t, runB) {
+			assert.Equal(t, expectedBSchedule, runB.ScheduledAt)
+			assert.Equal(t, jobNameB, runB.JobName)
+			assert.Equal(t, 2, runB.TaskAttempts)
+			assert.Equal(t, 1, runB.HookAttempts)
+		}
 
 		// assert job C results
 		assert.Len(t, upstreamB.Upstreams, 1)
@@ -256,13 +261,16 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameC, upstreamC.JobName)
 		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
-		assert.Len(t, upstreamC.JobRuns, 1)
+		assert.Equal(t, 1, upstreamC.DownstreamRunCount())
 		expectedCSchedule := selectedCSchedule
 		// job-c's immediate downstream is job-b, so its run is keyed by job-b, not the tree root
-		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[jobNameB].ScheduledAt)
-		assert.Equal(t, jobNameC, upstreamC.JobRuns[jobNameB].JobName)
-		assert.Equal(t, 1, upstreamC.JobRuns[jobNameB].TaskAttempts)
-		assert.Equal(t, 3, upstreamC.JobRuns[jobNameB].HookAttempts)
+		runC := upstreamC.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, expectedBSchedule))
+		if assert.NotNil(t, runC) {
+			assert.Equal(t, expectedCSchedule, runC.ScheduledAt)
+			assert.Equal(t, jobNameC, runC.JobName)
+			assert.Equal(t, 1, runC.TaskAttempts)
+			assert.Equal(t, 3, runC.HookAttempts)
+		}
 
 		assert.Empty(t, upstreamC.Upstreams)
 
@@ -615,12 +623,14 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameA, result.JobName)
 		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
 		assert.EqualValues(t, result.Window, &yestWindowCfg)
-		assert.Equal(t, len(result.JobRuns), 1)
-		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
-		assert.Nil(t, result.JobRuns[jobNameA].JobStartTime)
-		assert.Nil(t, result.JobRuns[jobNameA].JobEndTime)
-		assert.Nil(t, result.JobRuns[jobNameA].TaskStartTime)
-		assert.Nil(t, result.JobRuns[jobNameA].TaskEndTime)
+		rootRun := result.GetTargetRun()
+		if assert.NotNil(t, rootRun) {
+			assert.Equal(t, scheduledTime, rootRun.ScheduledAt)
+			assert.Nil(t, rootRun.JobStartTime)
+			assert.Nil(t, rootRun.JobEndTime)
+			assert.Nil(t, rootRun.TaskStartTime)
+			assert.Nil(t, rootRun.TaskEndTime)
+		}
 
 		// assert job B results
 		assert.Len(t, result.Upstreams, 1)
@@ -628,10 +638,13 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameB, upstreamB.JobName)
 		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
-		assert.Len(t, upstreamB.JobRuns, 1)
+		assert.Equal(t, 1, upstreamB.DownstreamRunCount())
 		expectedBSchedule := jobBExpectedSchedules[0]
-		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
+		runB := upstreamB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduledTime))
+		if assert.NotNil(t, runB) {
+			assert.Equal(t, expectedBSchedule, runB.ScheduledAt)
+			assert.Equal(t, jobNameB, runB.JobName)
+		}
 
 		// assert job C results: should be empty
 		assert.Len(t, upstreamB.Upstreams, 1)
@@ -639,7 +652,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameC, upstreamC.JobName)
 		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
-		assert.Len(t, upstreamC.JobRuns, 0)
+		assert.False(t, upstreamC.HasRuns())
 		assert.Empty(t, upstreamC.Upstreams)
 
 		upstreamRepo.AssertExpectations(t)
@@ -741,11 +754,247 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Same(t, upstreamDViaB, upstreamDViaC)
 
 		// D must carry both runs, keyed by its immediate downstream, not just the last one processed
-		assert.Len(t, upstreamDViaB.JobRuns, 2)
-		assert.Equal(t, scheduleDViaB, upstreamDViaB.JobRuns[jobNameB].ScheduledAt)
-		assert.Equal(t, scheduleDViaC, upstreamDViaB.JobRuns[jobNameC].ScheduledAt)
-		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].TaskAttempts)
-		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].HookAttempts)
+		assert.Equal(t, 2, upstreamDViaB.DownstreamRunCount())
+		runDViaB := upstreamDViaB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, scheduleB))
+		runDViaC := upstreamDViaB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameC, scheduleC))
+		if assert.NotNil(t, runDViaB) && assert.NotNil(t, runDViaC) {
+			assert.Equal(t, scheduleDViaB, runDViaB.ScheduledAt)
+			assert.Equal(t, scheduleDViaC, runDViaC.ScheduledAt)
+			assert.Equal(t, 0, runDViaB.TaskAttempts)
+			assert.Equal(t, 0, runDViaB.HookAttempts)
+		}
+
+		upstreamRepo.AssertExpectations(t)
+		jobRepo.AssertExpectations(t)
+		jobRunService.AssertExpectations(t)
+		projectGetter.AssertExpectations(t)
+	})
+
+	t.Run("preserves distinct per-run edges across a 2-hop diamond sharing an intermediate job at different schedules", func(t *testing.T) {
+		upstreamRepo := new(MockJobUpstreamRepository)
+		jobRepo := new(MockJobRepository)
+		jobRunService := new(MockJobRunService)
+		projectGetter := new(MockProjectGetter)
+
+		jobNameRoot := scheduler.JobName("job-root")
+		jobNameD := scheduler.JobName("job-d")
+
+		jobRootDetails := &scheduler.JobSummary{
+			JobName:          jobNameRoot,
+			IsEnabled:        true,
+			Tenant:           jobTenant,
+			Window:           yestWindowCfg,
+			ScheduleInterval: "0 9 * * *",
+		}
+		jobDWithDetails := &scheduler.JobSummary{
+			JobName:          jobNameD,
+			IsEnabled:        true,
+			Tenant:           jobTenant,
+			Window:           yestWindowCfg,
+			ScheduleInterval: "0 * * * *",
+		}
+
+		// Use non-UTC timezone on root to also verify UTC normalization in JobRunKey lookups.
+		wib := time.FixedZone("WIB", 7*3600)
+		rootScheduleWIB := time.Date(2023, 1, 1, 16, 0, 0, 0, wib) // 09:00 UTC
+		rootScheduleUTC := rootScheduleWIB.UTC()
+		scheduleA := time.Date(2023, 1, 1, 8, 0, 0, 0, time.UTC)
+		scheduleC := time.Date(2023, 1, 1, 8, 0, 0, 0, time.UTC)
+		scheduleB7am := time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)
+		scheduleB3am := time.Date(2023, 1, 1, 3, 0, 0, 0, time.UTC)
+		scheduleD6am := time.Date(2023, 1, 1, 6, 0, 0, 0, time.UTC)
+		scheduleD2am := time.Date(2023, 1, 1, 2, 0, 0, 0, time.UTC)
+
+		jobSchedules := []*scheduler.JobSchedule{
+			{JobName: jobNameRoot, ScheduledAt: rootScheduleWIB},
+		}
+
+		// Root -> {A, C} -> B -> D where A->B@7am->D@6am and C->B@3am->D@2am.
+		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
+			jobNameRoot: {jobNameA, jobNameC},
+			jobNameA:    {jobNameB},
+			jobNameC:    {jobNameB},
+			jobNameB:    {jobNameD},
+		}
+		jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
+			jobNameRoot: jobRootDetails,
+			jobNameA:    jobAWithDetails,
+			jobNameB:    jobBWithDetails,
+			jobNameC:    jobCWithDetails,
+			jobNameD:    jobDWithDetails,
+		}
+
+		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
+		jobRepo.On("GetSummaryByNames",
+			ctx,
+			matchValues([]scheduler.JobName{jobNameRoot, jobNameA, jobNameB, jobNameC, jobNameD},
+				func(name scheduler.JobName) string { return name.String() }),
+		).Return(jobsByName, nil)
+		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
+
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobRootDetails.ScheduleInterval, jobRootDetails.Window, jobAWithDetails.ScheduleInterval, rootScheduleWIB,
+		).Return([]time.Time{scheduleA}, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobRootDetails.ScheduleInterval, jobRootDetails.Window, jobCWithDetails.ScheduleInterval, rootScheduleWIB,
+		).Return([]time.Time{scheduleC}, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobAWithDetails.ScheduleInterval, jobAWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduleA,
+		).Return([]time.Time{scheduleB7am}, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobCWithDetails.ScheduleInterval, jobCWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduleC,
+		).Return([]time.Time{scheduleB3am}, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobBWithDetails.ScheduleInterval, jobBWithDetails.Window, jobDWithDetails.ScheduleInterval, scheduleB7am,
+		).Return([]time.Time{scheduleD6am}, nil)
+		jobRunService.On("GetExpectedRunSchedules",
+			ctx, project, jobBWithDetails.ScheduleInterval, jobBWithDetails.Window, jobDWithDetails.ScheduleInterval, scheduleB3am,
+		).Return([]time.Time{scheduleD2am}, nil)
+
+		jobRunsToFetch := []scheduler.JobRunIdentifier{
+			{JobName: jobNameRoot, ScheduledAt: rootScheduleWIB},
+			{JobName: jobNameA, ScheduledAt: scheduleA},
+			{JobName: jobNameC, ScheduledAt: scheduleC},
+			{JobName: jobNameB, ScheduledAt: scheduleB7am},
+			{JobName: jobNameB, ScheduledAt: scheduleB3am},
+			{JobName: jobNameD, ScheduledAt: scheduleD6am},
+			{JobName: jobNameD, ScheduledAt: scheduleD2am},
+		}
+		jobRunService.On("GetJobRunsByIdentifiers", ctx, matchValues(jobRunsToFetch, func(id scheduler.JobRunIdentifier) string {
+			return id.JobName.String() + id.ScheduledAt.UTC().String()
+		})).Return([]*scheduler.JobRunSummary{
+			{JobName: jobNameRoot, ScheduledAt: rootScheduleUTC, TaskAttempts: 1},
+			{JobName: jobNameB, ScheduledAt: scheduleB7am, TaskAttempts: 7},
+			{JobName: jobNameB, ScheduledAt: scheduleB3am, TaskAttempts: 3},
+			{JobName: jobNameD, ScheduledAt: scheduleD6am, TaskAttempts: 6},
+			{JobName: jobNameD, ScheduledAt: scheduleD2am, TaskAttempts: 2},
+		}, nil)
+
+		r := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
+		resultMap, err := r.BuildLineage(ctx, jobSchedules, 24*365)
+
+		assert.NoError(t, err)
+		root := resultMap[jobSchedules[0]]
+		assert.NotNil(t, root.GetTargetRun())
+		assert.Equal(t, 1, root.GetTargetRun().TaskAttempts)
+
+		nodeA := root.Upstreams[0]
+		nodeC := root.Upstreams[1]
+		assert.Same(t, nodeA.Upstreams[0], nodeC.Upstreams[0])
+		nodeB := nodeA.Upstreams[0]
+		assert.Equal(t, 2, nodeB.DownstreamRunCount())
+		assert.Equal(t, scheduleB7am, nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduleA)).ScheduledAt)
+		assert.Equal(t, 7, nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduleA)).TaskAttempts)
+		assert.Equal(t, scheduleB3am, nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameC, scheduleC)).ScheduledAt)
+		assert.Equal(t, 3, nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameC, scheduleC)).TaskAttempts)
+
+		nodeD := nodeB.Upstreams[0]
+		assert.Equal(t, 2, nodeD.DownstreamRunCount())
+		runD6 := nodeD.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, scheduleB7am))
+		runD2 := nodeD.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, scheduleB3am))
+		assert.NotNil(t, runD6)
+		assert.NotNil(t, runD2)
+		assert.Equal(t, scheduleD6am, runD6.ScheduledAt)
+		assert.Equal(t, 6, runD6.TaskAttempts)
+		assert.Equal(t, scheduleD2am, runD2.ScheduledAt)
+		assert.Equal(t, 2, runD2.TaskAttempts)
+		assert.Nil(t, nodeD.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC))))
+
+		upstreamRepo.AssertExpectations(t)
+		jobRepo.AssertExpectations(t)
+		jobRunService.AssertExpectations(t)
+		projectGetter.AssertExpectations(t)
+	})
+
+	t.Run("deduplicates shared upstream work when two branches reach the same (job, schedule) with different timezones", func(t *testing.T) {
+		upstreamRepo := new(MockJobUpstreamRepository)
+		jobRepo := new(MockJobRepository)
+		jobRunService := new(MockJobRunService)
+		projectGetter := new(MockProjectGetter)
+
+		jobNameRoot := scheduler.JobName("job-root")
+		jobRootDetails := &scheduler.JobSummary{
+			JobName:          jobNameRoot,
+			IsEnabled:        true,
+			Tenant:           jobTenant,
+			Window:           yestWindowCfg,
+			ScheduleInterval: "0 9 * * *",
+		}
+
+		wib := time.FixedZone("WIB", 7*3600)
+		rootSched := time.Date(2023, 1, 1, 9, 0, 0, 0, time.UTC)
+		scheduleA := time.Date(2023, 1, 1, 8, 0, 0, 0, time.UTC)
+		scheduleC := time.Date(2023, 1, 1, 7, 0, 0, 0, time.UTC)
+		sharedBUTC := time.Date(2023, 1, 1, 5, 0, 0, 0, time.UTC)
+		sharedBWIB := sharedBUTC.In(wib)
+		scheduleD := time.Date(2023, 1, 1, 4, 0, 0, 0, time.UTC)
+
+		jobNameD := scheduler.JobName("job-d")
+		jobDDetails := &scheduler.JobSummary{
+			JobName:          jobNameD,
+			IsEnabled:        true,
+			Tenant:           jobTenant,
+			Window:           yestWindowCfg,
+			ScheduleInterval: "0 4 * * *",
+		}
+
+		jobSchedules := []*scheduler.JobSchedule{{JobName: jobNameRoot, ScheduledAt: rootSched}}
+		upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
+			jobNameRoot: {jobNameA, jobNameC},
+			jobNameA:    {jobNameB},
+			jobNameC:    {jobNameB},
+			jobNameB:    {jobNameD},
+		}
+		jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
+			jobNameRoot: jobRootDetails,
+			jobNameA:    jobAWithDetails,
+			jobNameB:    jobBWithDetails,
+			jobNameC:    jobCWithDetails,
+			jobNameD:    jobDDetails,
+		}
+
+		upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
+		jobRepo.On("GetSummaryByNames",
+			ctx,
+			matchValues([]scheduler.JobName{jobNameRoot, jobNameA, jobNameB, jobNameC, jobNameD},
+				func(name scheduler.JobName) string { return name.String() }),
+		).Return(jobsByName, nil)
+		projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
+
+		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobRootDetails.ScheduleInterval, jobRootDetails.Window, jobAWithDetails.ScheduleInterval, rootSched).
+			Return([]time.Time{scheduleA}, nil)
+		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobRootDetails.ScheduleInterval, jobRootDetails.Window, jobCWithDetails.ScheduleInterval, rootSched).
+			Return([]time.Time{scheduleC}, nil)
+		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobAWithDetails.ScheduleInterval, jobAWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduleA).
+			Return([]time.Time{sharedBUTC}, nil)
+		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobCWithDetails.ScheduleInterval, jobCWithDetails.Window, jobBWithDetails.ScheduleInterval, scheduleC).
+			Return([]time.Time{sharedBWIB}, nil)
+		// Assert B -> D schedule resolution is invoked only once despite UTC vs WIB representations of 05:00 UTC.
+		jobRunService.On("GetExpectedRunSchedules", ctx, project, jobBWithDetails.ScheduleInterval, jobBWithDetails.Window, jobDDetails.ScheduleInterval, sharedBUTC).
+			Return([]time.Time{scheduleD}, nil).Once()
+
+		jobRunService.On("GetJobRunsByIdentifiers", ctx, matchValues([]scheduler.JobRunIdentifier{
+			{JobName: jobNameRoot, ScheduledAt: rootSched},
+			{JobName: jobNameA, ScheduledAt: scheduleA},
+			{JobName: jobNameC, ScheduledAt: scheduleC},
+			{JobName: jobNameB, ScheduledAt: sharedBUTC},
+			{JobName: jobNameD, ScheduledAt: scheduleD},
+		}, func(id scheduler.JobRunIdentifier) string {
+			return id.JobName.String() + id.ScheduledAt.UTC().String()
+		})).Return([]*scheduler.JobRunSummary{}, nil)
+
+		r := resolver.NewLineageResolver(upstreamRepo, jobRepo, jobRunService, projectGetter, logger)
+		resultMap, err := r.BuildLineage(ctx, jobSchedules, 24*365)
+
+		assert.NoError(t, err)
+		root := resultMap[jobSchedules[0]]
+		nodeB := root.Upstreams[0].Upstreams[0]
+		runBFromA := nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduleA))
+		runBFromC := nodeB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameC, scheduleC))
+		assert.Equal(t, sharedBUTC, runBFromA.ScheduledAt)
+		assert.True(t, sharedBWIB.Equal(runBFromC.ScheduledAt))
+		assert.Same(t, runBFromA, runBFromC)
+		assert.Equal(t, scheduleD, nodeB.Upstreams[0].GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, sharedBUTC)).ScheduledAt)
 
 		upstreamRepo.AssertExpectations(t)
 		jobRepo.AssertExpectations(t)

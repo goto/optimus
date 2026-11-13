@@ -144,9 +144,11 @@ func pickMaxDelay(causes []*scheduler.JobState) *scheduler.JobState {
 			continue
 		}
 		// deterministic tie-break so repeated runs pick the same cause
-		if cause.Evidence.InducedDelay == chosen.Evidence.InducedDelay && cause.JobName < chosen.JobName {
-			chosen = cause
-			continue
+		if cause.Evidence.InducedDelay == chosen.Evidence.InducedDelay {
+			if cause.JobName < chosen.JobName || (cause.JobName == chosen.JobName && cause.JobRun.ScheduledAt.Before(chosen.JobRun.ScheduledAt)) {
+				chosen = cause
+				continue
+			}
 		}
 	}
 	return chosen

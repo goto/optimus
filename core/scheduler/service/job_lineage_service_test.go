@@ -109,11 +109,9 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil},
-			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		lineageSummary.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -147,11 +145,9 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt},
-			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		lineageSummary.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -181,11 +177,9 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
-			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
+		lineageSummary.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,
@@ -233,24 +227,23 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 
 		// both targets depend on the same upstream, at the same schedule
 		sharedRun := func(downstream scheduler.JobName) *scheduler.JobLineageSummary {
-			return &scheduler.JobLineageSummary{
+			n := &scheduler.JobLineageSummary{
 				JobName:   "shared-upstream",
 				IsEnabled: true,
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-					downstream: {JobName: "shared-upstream", ScheduledAt: scheduledAt},
-				},
 			}
+			n.RecordUpstreamRun(scheduler.NewJobRunKey(downstream, scheduledAt), &scheduler.JobRunSummary{JobName: "shared-upstream", ScheduledAt: scheduledAt})
+			return n
 		}
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {JobName: "job-A", ScheduledAt: scheduledAt}},
 			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-A")},
 		}
+		lineageA.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt})
 		lineageB := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": {JobName: "job-B", ScheduledAt: scheduledAt}},
 			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-B")},
 		}
+		lineageB.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-B", ScheduledAt: scheduledAt})
 
 		schedules := []*scheduler.JobSchedule{scheduleA, scheduleB}
 		lineageBuilder.On("BuildLineage", ctx, schedules, 24).Return(
@@ -293,10 +286,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
-			},
 		}
+		lineageSummary.RecordTargetRun(&scheduler.JobRunSummary{JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName})
 
 		lineageBuilder.On("BuildLineage", ctx, []*scheduler.JobSchedule{jobSchedule}, 24).Return(
 			map[*scheduler.JobSchedule]*scheduler.JobLineageSummary{jobSchedule: lineageSummary}, nil,

@@ -13,8 +13,9 @@ import (
 )
 
 type downstreamJobNameAndRunPair struct {
-	JobName   scheduler.JobName
-	JobRunSum *scheduler.JobRunSummary
+	JobName               scheduler.JobName
+	DownstreamScheduledAt time.Time
+	JobRunSum             *scheduler.JobRunSummary
 }
 
 func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Config, upstreams []*scheduler.JobLineageSummary, runPairs ...downstreamJobNameAndRunPair) *scheduler.JobLineageSummary {
@@ -25,11 +26,14 @@ func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Conf
 		Window:           windowConfig,
 		SLA:              scheduler.SLAConfig{Duration: time.Hour},
 		Upstreams:        upstreams,
-		JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{},
 	}
 
 	for _, pair := range runPairs {
-		summary.JobRuns[pair.JobName] = pair.JobRunSum
+		if pair.JobName == scheduler.JobName(name) {
+			summary.RecordTargetRun(pair.JobRunSum)
+			continue
+		}
+		summary.RecordUpstreamRun(scheduler.NewJobRunKey(pair.JobName, pair.DownstreamScheduledAt), pair.JobRunSum)
 	}
 
 	return summary
@@ -38,8 +42,9 @@ func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Conf
 // nolint:unparam
 func createJobRunPair(downstreamJobName, jobName string, baseTime, startTime, endTime time.Time) downstreamJobNameAndRunPair {
 	return downstreamJobNameAndRunPair{
-		JobName:   scheduler.JobName(downstreamJobName),
-		JobRunSum: createJobRun(jobName, baseTime, startTime, endTime),
+		JobName:               scheduler.JobName(downstreamJobName),
+		DownstreamScheduledAt: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		JobRunSum:             createJobRun(jobName, baseTime, startTime, endTime),
 	}
 }
 
@@ -92,7 +97,11 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		rootEndTime := baseTime.Add(30 * time.Minute)
 
 		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream", baseTime, upstreamStartTime, upstreamEndTime))
+			downstreamJobNameAndRunPair{
+				JobName:               "root",
+				DownstreamScheduledAt: baseTime,
+				JobRunSum:             createJobRun("upstream", baseTime, upstreamStartTime, upstreamEndTime),
+			})
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", "root", baseTime, rootStartTime, rootEndTime))
 
@@ -115,7 +124,11 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		rootEndTime := baseRootTime.Add(45 * time.Minute)
 
 		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream", baseTime, upstreamStartTime, upstreamEndTime))
+			downstreamJobNameAndRunPair{
+				JobName:               "root",
+				DownstreamScheduledAt: baseRootTime,
+				JobRunSum:             createJobRun("upstream", baseTime, upstreamStartTime, upstreamEndTime),
+			})
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", "root", baseRootTime, rootStartTime, rootEndTime))
 
@@ -138,7 +151,11 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		rootEndTime := baseTime.Add(30 * time.Minute)
 
 		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
-			createJobRunPair("root", "upstream", baseTime, upstreamStartTime, upstreamEndTime))
+			downstreamJobNameAndRunPair{
+				JobName:               "root",
+				DownstreamScheduledAt: baseTime,
+				JobRunSum:             createJobRun("upstream", baseTime, upstreamStartTime, upstreamEndTime),
+			})
 		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
 			createJobRunPair("root", "root", baseTime, rootStartTime, rootEndTime))
 
@@ -185,8 +202,8 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 			ScheduleInterval: "0 8 * * *",
 			Window:           &windowConfig,
 			SLA:              scheduler.SLAConfig{Duration: time.Hour},
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): jobRun},
 		}
+		jobLineage.RecordTargetRun(jobRun)
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
@@ -198,7 +215,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 	t.Run("should limit top longest jobs to 3", func(t *testing.T) {
 		var upstreams []*scheduler.JobLineageSummary
-		jobRuns := make(map[scheduler.JobName]*scheduler.JobRunSummary)
+		rootKey := scheduler.NewJobRunKey("root", baseTime)
 
 		for i := 1; i <= 5; i++ {
 			jobName := scheduler.JobName(fmt.Sprintf("job%d", i))
@@ -211,12 +228,11 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 				TaskStartTime: &taskStart,
 				TaskEndTime:   &taskEnd,
 			}
-			jobRuns[scheduler.JobName("root")] = jobRun
 
 			upstream := &scheduler.JobLineageSummary{
 				JobName: jobName,
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): jobRun},
 			}
+			upstream.RecordUpstreamRun(rootKey, jobRun)
 			upstreams = append(upstreams, upstream)
 		}
 
@@ -224,13 +240,12 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 			JobName:     scheduler.JobName("root"),
 			ScheduledAt: baseTime,
 		}
-		jobRuns[scheduler.JobName("root")] = rootRun
 
 		jobLineage := &scheduler.JobLineageSummary{
 			JobName:   scheduler.JobName("root"),
 			Upstreams: upstreams,
-			JobRuns:   jobRuns,
 		}
+		jobLineage.RecordTargetRun(rootRun)
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
@@ -247,8 +262,8 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 		upstream := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("incomplete"),
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): incompleteRun},
 		}
+		upstream.RecordUpstreamRun(scheduler.NewJobRunKey("root", baseTime), incompleteRun)
 
 		rootRun := &scheduler.JobRunSummary{
 			JobName:     scheduler.JobName("root"),
@@ -258,8 +273,8 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := &scheduler.JobLineageSummary{
 			JobName:   scheduler.JobName("root"),
 			Upstreams: []*scheduler.JobLineageSummary{upstream},
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): rootRun},
 		}
+		jobLineage.RecordTargetRun(rootRun)
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
@@ -280,8 +295,9 @@ func createRunningJobRun(jobName string, scheduledAt, startTime time.Time) *sche
 
 func createRunningJobRunPair(downstreamJobName, jobName string, scheduledAt, startTime time.Time) downstreamJobNameAndRunPair {
 	return downstreamJobNameAndRunPair{
-		JobName:   scheduler.JobName(downstreamJobName),
-		JobRunSum: createRunningJobRun(jobName, scheduledAt, startTime),
+		JobName:               scheduler.JobName(downstreamJobName),
+		DownstreamScheduledAt: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		JobRunSum:             createRunningJobRun(jobName, scheduledAt, startTime),
 	}
 }
 
@@ -435,7 +451,6 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 
 		upstreamWithoutRun := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("without_run"),
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{},
 		}
 
 		jobLineage := createJobLineage("root", tnnt, &windowConfig,
@@ -525,11 +540,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 			Tenant:    tnnt,
 			SLA:       scheduler.SLAConfig{Duration: time.Hour},
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("B"): sharedRun,
-				scheduler.JobName("C"): sharedRun,
-			},
 		}
+		d.RecordUpstreamRun(scheduler.NewJobRunKey("B", baseTime), sharedRun)
+		d.RecordUpstreamRun(scheduler.NewJobRunKey("C", baseTime), sharedRun)
 		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
 			createJobRunPair("root", "B", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
 		c := createJobLineage("C", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
@@ -561,11 +574,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		d := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("D"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("B"): runViaB,
-				scheduler.JobName("C"): runViaC,
-			},
 		}
+		d.RecordUpstreamRun(scheduler.NewJobRunKey("B", baseTime), runViaB)
+		d.RecordUpstreamRun(scheduler.NewJobRunKey("C", baseTime), runViaC)
 		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
 			createJobRunPair("root", "B", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
 		c := createJobLineage("C", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
@@ -614,11 +625,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		shared := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("shared"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("root"): sharedRun,
-				scheduler.JobName("mid"):  sharedRun,
-			},
 		}
+		shared.RecordUpstreamRun(scheduler.NewJobRunKey("root", baseTime), sharedRun)
+		shared.RecordUpstreamRun(scheduler.NewJobRunKey("mid", baseTime), sharedRun)
 		mid := createJobLineage("mid", tnnt, &windowConfig, []*scheduler.JobLineageSummary{shared},
 			createJobRunPair("root", "mid", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(8*time.Minute)))
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{mid, shared},
@@ -630,6 +639,104 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		if assert.NotNil(t, sharedNode) {
 			assert.Equal(t, 1, sharedNode.Level, "level should be the shortest distance from the target")
 			assert.Len(t, sharedNode.DownstreamRefs, 2)
+		}
+	})
+
+	t.Run("should preserve per-run edges through shared intermediate job for both unlimited and TopUpstreamsPerJob=1", func(t *testing.T) {
+		rootSched := baseTime
+		schedA := baseTime.Add(-1 * time.Hour)
+		schedC := baseTime.Add(-1 * time.Hour)
+		schedB7 := baseTime.Add(-2 * time.Hour)
+		schedB3 := baseTime.Add(-6 * time.Hour)
+		schedD6 := baseTime.Add(-3 * time.Hour)
+		schedD2 := baseTime.Add(-7 * time.Hour)
+
+		runRoot := createJobRun("root", rootSched, rootSched.Add(1*time.Minute), rootSched.Add(2*time.Minute))
+		runA := createJobRun("A", schedA, schedA.Add(2*time.Minute), schedA.Add(5*time.Minute))
+		runC := createJobRun("C", schedC, schedC.Add(1*time.Minute), schedC.Add(3*time.Minute))
+		runB7 := createJobRun("B", schedB7, schedB7.Add(2*time.Minute), schedB7.Add(10*time.Minute))
+		runB3 := createJobRun("B", schedB3, schedB3.Add(2*time.Minute), schedB3.Add(4*time.Minute))
+		runD6 := createJobRun("D", schedD6, schedD6.Add(1*time.Minute), schedD6.Add(8*time.Minute))
+		runD2 := createJobRun("D", schedD2, schedD2.Add(1*time.Minute), schedD2.Add(4*time.Minute))
+
+		nodeD := &scheduler.JobLineageSummary{
+			JobName:   "D",
+			Tenant:    tnnt,
+			IsEnabled: true,
+		}
+		nodeD.RecordUpstreamRun(scheduler.NewJobRunKey("B", schedB7), runD6)
+		nodeD.RecordUpstreamRun(scheduler.NewJobRunKey("B", schedB3), runD2)
+
+		nodeB := &scheduler.JobLineageSummary{
+			JobName:   "B",
+			Tenant:    tnnt,
+			IsEnabled: true,
+			Upstreams: []*scheduler.JobLineageSummary{nodeD},
+		}
+		nodeB.RecordUpstreamRun(scheduler.NewJobRunKey("A", schedA), runB7)
+		nodeB.RecordUpstreamRun(scheduler.NewJobRunKey("C", schedC), runB3)
+
+		nodeA := &scheduler.JobLineageSummary{
+			JobName:   "A",
+			Tenant:    tnnt,
+			IsEnabled: true,
+			Upstreams: []*scheduler.JobLineageSummary{nodeB},
+		}
+		nodeA.RecordUpstreamRun(scheduler.NewJobRunKey("root", rootSched), runA)
+
+		nodeC := &scheduler.JobLineageSummary{
+			JobName:   "C",
+			Tenant:    tnnt,
+			IsEnabled: true,
+			Upstreams: []*scheduler.JobLineageSummary{nodeB},
+		}
+		nodeC.RecordUpstreamRun(scheduler.NewJobRunKey("root", rootSched), runC)
+
+		root := &scheduler.JobLineageSummary{
+			JobName:   "root",
+			Tenant:    tnnt,
+			IsEnabled: true,
+			Upstreams: []*scheduler.JobLineageSummary{nodeA, nodeC},
+		}
+		root.RecordTargetRun(runRoot)
+
+		// TopUpstreamsPerJob=0 keeps both branches and resolves D's edges per (B, ScheduledAt).
+		full := root.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 0, MaxDepth: 5, TopUpstreamsPerJob: 0})
+		assert.Equal(t, 2, countNodes(full.Nodes, "B"))
+		assert.Equal(t, 2, countNodes(full.Nodes, "D"))
+
+		byKey := make(map[scheduler.JobRunKey]*scheduler.JobExecutionSummary, len(full.Nodes))
+		for _, n := range full.Nodes {
+			byKey[scheduler.NewJobRunKey(n.JobName, n.JobRunSummary.ScheduledAt)] = n
+		}
+		keyD6 := scheduler.NewJobRunKey("D", schedD6)
+		keyD2 := scheduler.NewJobRunKey("D", schedD2)
+		keyB7 := scheduler.NewJobRunKey("B", schedB7)
+		keyB3 := scheduler.NewJobRunKey("B", schedB3)
+		if assert.NotNil(t, byKey[keyD6]) {
+			assert.Len(t, byKey[keyD6].DownstreamRefs, 1)
+			assert.Equal(t, scheduler.JobName("B"), byKey[keyD6].DownstreamRefs[0].JobName)
+			assert.Equal(t, schedB7.UTC(), byKey[keyD6].DownstreamRefs[0].ScheduledAt.UTC())
+		}
+		if assert.NotNil(t, byKey[keyD2]) {
+			assert.Len(t, byKey[keyD2].DownstreamRefs, 1)
+			assert.Equal(t, scheduler.JobName("B"), byKey[keyD2].DownstreamRefs[0].JobName)
+			assert.Equal(t, schedB3.UTC(), byKey[keyD2].DownstreamRefs[0].ScheduledAt.UTC())
+		}
+		assert.Equal(t, []scheduler.JobRunKey{keyD6}, full.UpstreamsByKey[keyB7])
+		assert.Equal(t, []scheduler.JobRunKey{keyD2}, full.UpstreamsByKey[keyB3])
+
+		// TopUpstreamsPerJob=1 selects only A (latest JobEndTime at level 1), so only B@7am -> D@6am appears.
+		topOne := root.GetLineageNodes(scheduler.LineageWalkOptions{MaxNodes: 0, MaxDepth: 5, TopUpstreamsPerJob: 1})
+		assert.Equal(t, 1, countNodes(topOne.Nodes, "A"))
+		assert.Equal(t, 0, countNodes(topOne.Nodes, "C"))
+		assert.Equal(t, 1, countNodes(topOne.Nodes, "B"))
+		assert.Equal(t, 1, countNodes(topOne.Nodes, "D"))
+		bTop := findNode(topOne.Nodes, "B")
+		dTop := findNode(topOne.Nodes, "D")
+		if assert.NotNil(t, bTop) && assert.NotNil(t, dTop) {
+			assert.Equal(t, schedB7.UTC(), bTop.JobRunSummary.ScheduledAt.UTC())
+			assert.Equal(t, schedD6.UTC(), dTop.JobRunSummary.ScheduledAt.UTC())
 		}
 	})
 
@@ -657,13 +764,11 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		notStarted := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("not_started"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("root"): {
-					JobName:     scheduler.JobName("not_started"),
-					ScheduledAt: baseTime,
-				},
-			},
 		}
+		notStarted.RecordUpstreamRun(scheduler.NewJobRunKey("root", baseTime), &scheduler.JobRunSummary{
+			JobName:     scheduler.JobName("not_started"),
+			ScheduledAt: baseTime,
+		})
 		root := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{notStarted},
 			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
 
@@ -684,7 +789,7 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		failedRun := createJobRun("failed", baseTime, baseTime.Add(2*time.Minute), baseTime.Add(3*time.Minute))
 		failedRun.JobStatus = scheduler.StateFailed.String()
 		failed := createJobLineage("failed", tnnt, &windowConfig, nil,
-			downstreamJobNameAndRunPair{JobName: scheduler.JobName("root"), JobRunSum: failedRun})
+			downstreamJobNameAndRunPair{JobName: scheduler.JobName("root"), DownstreamScheduledAt: baseTime, JobRunSum: failedRun})
 		root := createJobLineage("root", tnnt, &windowConfig,
 			[]*scheduler.JobLineageSummary{succeeded, running, failed},
 			createRunningJobRunPair("root", "root", baseTime, baseTime.Add(20*time.Minute)))
@@ -1077,8 +1182,8 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		lineage := &scheduler.JobLineageSummary{
 			JobName: "job-A",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
 		}
+		lineage.RecordTargetRun(run)
 
 		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
 
@@ -1105,8 +1210,8 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		lineage := &scheduler.JobLineageSummary{
 			JobName: "job-A",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
 		}
+		lineage.RecordTargetRun(run)
 
 		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
 
@@ -1122,26 +1227,24 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		shared := &scheduler.JobLineageSummary{
 			JobName: "job-shared",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-B": sharedRun,
-				"job-C": sharedRun, // same pointer reached via two downstream paths
-			},
 		}
+		shared.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", before), sharedRun)
+		shared.RecordUpstreamRun(scheduler.NewJobRunKey("job-C", before), sharedRun) // same pointer reached via two downstream paths
 		jobB := &scheduler.JobLineageSummary{
 			JobName:   "job-B",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
 			Upstreams: []*scheduler.JobLineageSummary{shared},
 		}
+		jobB.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", before), &scheduler.JobRunSummary{ScheduledAt: before})
 		jobC := &scheduler.JobLineageSummary{
 			JobName:   "job-C",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
 			Upstreams: []*scheduler.JobLineageSummary{shared},
 		}
+		jobC.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", before), &scheduler.JobRunSummary{ScheduledAt: before})
 		root := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
 			Upstreams: []*scheduler.JobLineageSummary{jobB, jobC},
 		}
+		root.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: before})
 
 		assert.NotPanics(t, func() {
 			scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": root}, referenceTime)

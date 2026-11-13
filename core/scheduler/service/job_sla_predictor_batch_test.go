@@ -62,27 +62,26 @@ func TestIdentifySLABreachesBatch(t *testing.T) {
 		}
 
 		jobASchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName:          "job-A",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt}},
 		}
+		jobALineage.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-B",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt.Add(-15 * time.Minute)}},
 		}
+		jobBLineage.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{ScheduledAt: jobBScheduledAt})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName:          "job-C",
 			ScheduleInterval: interval,
 			IsEnabled:        true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime},
-			},
 		}
+		jobCLineage.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", jobBScheduledAt), &scheduler.JobRunSummary{ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime})
 		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 
@@ -187,21 +186,20 @@ func TestIdentifySLABreachesBatchImpactedJobDedup(t *testing.T) {
 			},
 		}
 		jobASchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
+		jobBScheduledAt := scheduledAt.Add(-15 * time.Minute)
 		jobALineage := &scheduler.JobLineageSummary{
 			JobName: "job-A", Tenant: tnnt, ScheduleInterval: interval, IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt}},
 		}
+		jobALineage.RecordTargetRun(&scheduler.JobRunSummary{ScheduledAt: scheduledAt})
 		jobBLineage := &scheduler.JobLineageSummary{
 			JobName: "job-B", Tenant: tnnt, ScheduleInterval: interval, IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: scheduledAt.Add(-15 * time.Minute)}},
 		}
+		jobBLineage.RecordUpstreamRun(scheduler.NewJobRunKey("job-A", scheduledAt), &scheduler.JobRunSummary{ScheduledAt: jobBScheduledAt})
 		jobCTaskStartTime := scheduledAt.Add(-20 * time.Minute)
 		jobCLineage := &scheduler.JobLineageSummary{
 			JobName: "job-C", Tenant: tnnt, ScheduleInterval: interval, IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime},
-			},
 		}
+		jobCLineage.RecordUpstreamRun(scheduler.NewJobRunKey("job-B", jobBScheduledAt), &scheduler.JobRunSummary{ScheduledAt: scheduledAt.Add(-25 * time.Minute), TaskStartTime: &jobCTaskStartTime})
 		jobALineage.Upstreams = []*scheduler.JobLineageSummary{jobBLineage}
 		jobBLineage.Upstreams = []*scheduler.JobLineageSummary{jobCLineage}
 

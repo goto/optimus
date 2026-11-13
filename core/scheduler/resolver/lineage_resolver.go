@@ -159,7 +159,6 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 
 	result[jobName] = &scheduler.JobLineageSummary{
 		JobName: jobName,
-		JobRuns: make(map[scheduler.JobName]*scheduler.JobRunSummary),
 	}
 
 	if job, exists := lineageData.JobsByName[jobName]; exists && job.IsEnabled {
@@ -176,26 +175,20 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 	return result[jobName]
 }
 
-type visitKey struct {
-	jobName     scheduler.JobName
-	scheduledAt time.Time
-}
-
 func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, scheduledAt time.Time, lineageData *LineageData, validLineageIntervalInHours int) (*scheduler.JobLineageSummary, error) {
 	allJobRunsMap := make(map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary)
 	// initialize first job run in the lineage
 	baseSLATime := scheduledAt.Add(lineage.SLA.Duration)
-	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{
-		lineage.JobName: {
-			JobName:     lineage.JobName,
-			ScheduledAt: scheduledAt,
-			SLATime:     &baseSLATime,
-		},
+	rootRun := &scheduler.JobRunSummary{
+		JobName:     lineage.JobName,
+		ScheduledAt: scheduledAt,
+		SLATime:     &baseSLATime,
 	}
+	lineage.RecordTargetRun(rootRun)
 
 	// calculate upstream job runs within the valid lineage interval
 	referenceTime := scheduledAt.Add(-time.Duration(validLineageIntervalInHours) * time.Hour)
-	err := r.calculateAllUpstreamRuns(ctx, lineage, lineageData, allJobRunsMap, make(map[visitKey]bool), referenceTime)
+	err := r.calculateAllUpstreamRuns(ctx, lineage, rootRun, lineageData, allJobRunsMap, referenceTime)
 	if err != nil {
 		return nil, err
 	}
@@ -208,44 +201,51 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 	return r.populateLineageWithJobRuns(lineage, jobRunDetails, make(map[scheduler.JobName]*scheduler.JobLineageSummary)), nil
 }
 
-// calculateAllUpstreamRuns walks the lineage tree and, for each job, computes the schedule of
-// its upstreams. A job reached via multiple downstream paths (a diamond) is keyed in JobRuns by
-// its immediate downstream job name, not by the traversal's ultimate root - this lets a shared
-// upstream carry a distinct run per path instead of the last-visited path silently overwriting
-// the others.
-func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, visited map[visitKey]bool, referenceTime time.Time) error {
-	if len(lineage.JobRuns) == 0 {
+// calculateAllUpstreamRuns walks the lineage graph breadth-first per resolved run (JobName, ScheduledAt)
+// and computes the schedule of its upstreams. Each resolved upstream edge is recorded via
+// RecordUpstreamRun keyed by the immediate downstream run's JobRunKey, so an upstream shared
+// across multiple paths or multiple schedule times of the same job never collides or overwrites
+// another schedule's subtree.
+func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, rootLineage *scheduler.JobLineageSummary, rootRun *scheduler.JobRunSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, referenceTime time.Time) error {
+	if rootLineage == nil || rootRun == nil {
 		return nil
 	}
 
-	currentJob := lineageData.JobsByName[lineage.JobName]
-	if currentJob == nil || !currentJob.IsEnabled {
-		return nil
+	type queueItem struct {
+		node *scheduler.JobLineageSummary
+		run  *scheduler.JobRunSummary
 	}
 
-	if _, exists := allJobRunsMap[lineage.JobName]; !exists {
-		allJobRunsMap[lineage.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
-	}
+	visited := make(map[scheduler.JobRunKey]bool)
+	queue := []queueItem{{node: rootLineage, run: rootRun}}
 
-	for _, jobRun := range lineage.JobRuns {
-		visitedKey := visitKey{
-			jobName:     lineage.JobName,
-			scheduledAt: jobRun.ScheduledAt,
-		}
-		if _, ok := visited[visitedKey]; ok {
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		currentJob := lineageData.JobsByName[item.node.JobName]
+		if currentJob == nil || !currentJob.IsEnabled {
 			continue
 		}
 
-		visited[visitedKey] = true
-		allJobRunsMap[lineage.JobName][jobRun.ScheduledAt.UTC()] = copyJobRun(jobRun)
+		currentKey := scheduler.NewJobRunKey(item.node.JobName, item.run.ScheduledAt)
+		if visited[currentKey] {
+			continue
+		}
+		visited[currentKey] = true
 
-		for _, upstream := range lineage.Upstreams {
+		if _, exists := allJobRunsMap[item.node.JobName]; !exists {
+			allJobRunsMap[item.node.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
+		}
+		allJobRunsMap[item.node.JobName][item.run.ScheduledAt.UTC()] = copyJobRun(item.run)
+
+		for _, upstream := range item.node.Upstreams {
 			upstreamJob := lineageData.JobsByName[upstream.JobName]
 			if upstreamJob == nil || !upstreamJob.IsEnabled {
 				continue
 			}
 
-			upstreamSchedule, err := r.getLatestUpstreamRun(ctx, currentJob, upstreamJob, jobRun.ScheduledAt, lineageData.ProjectsByName)
+			upstreamSchedule, err := r.getLatestUpstreamRun(ctx, currentJob, upstreamJob, item.run.ScheduledAt, lineageData.ProjectsByName)
 			if err != nil {
 				return err
 			}
@@ -258,23 +258,23 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 				allJobRunsMap[upstream.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
 			}
 
-			if _, exists := allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]; !exists {
+			upstreamUTC := upstreamSchedule.UTC()
+			upstreamRun, exists := allJobRunsMap[upstream.JobName][upstreamUTC]
+			if !exists {
 				baseSLATime := upstreamSchedule.Add(upstream.SLA.Duration)
-				allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()] = &scheduler.JobRunSummary{
+				upstreamRun = &scheduler.JobRunSummary{
 					JobName:     upstream.JobName,
 					ScheduledAt: upstreamSchedule,
 					SLATime:     &baseSLATime,
 				}
+				allJobRunsMap[upstream.JobName][upstreamUTC] = upstreamRun
 			}
 
-			if upstream.JobRuns == nil {
-				upstream.JobRuns = make(map[scheduler.JobName]*scheduler.JobRunSummary)
-			}
-			upstream.JobRuns[lineage.JobName] = allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
+			upstream.RecordUpstreamRun(currentKey, upstreamRun)
 
-			err = r.calculateAllUpstreamRuns(ctx, upstream, lineageData, allJobRunsMap, visited, referenceTime)
-			if err != nil {
-				return err
+			upstreamKey := scheduler.NewJobRunKey(upstream.JobName, upstreamSchedule)
+			if !visited[upstreamKey] {
+				queue = append(queue, queueItem{node: upstream, run: upstreamRun})
 			}
 		}
 	}
@@ -358,33 +358,15 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		return result[lineage.JobName]
 	}
 
-	result[lineage.JobName] = &scheduler.JobLineageSummary{
-		JobName:          lineage.JobName,
-		Tenant:           lineage.Tenant,
-		IsEnabled:        lineage.IsEnabled,
-		Window:           lineage.Window,
-		ScheduleInterval: lineage.ScheduleInterval,
-		SLA:              lineage.SLA,
-		Upstreams:        make([]*scheduler.JobLineageSummary, len(lineage.Upstreams)),
-	}
-
-	if jobRuns, exists := jobRunDetails[lineage.JobName]; exists {
-		// only fetch job runs that are necessary in the lineage
-		result[lineage.JobName].JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{}
-		for targetJobName, jobRun := range lineage.JobRuns {
-			if jobRun, exists := jobRuns[jobRun.ScheduledAt.UTC()]; exists {
-				result[lineage.JobName].JobRuns[targetJobName] = jobRun
-			}
-		}
-	} else {
-		result[lineage.JobName].JobRuns = lineage.JobRuns
-	}
+	cloned := lineage.CloneMetadata()
+	cloned.RebindRuns(lineage, jobRunDetails[lineage.JobName])
+	result[lineage.JobName] = cloned
 
 	for i, upstream := range lineage.Upstreams {
-		result[lineage.JobName].Upstreams[i] = r.populateLineageWithJobRuns(upstream, jobRunDetails, result)
+		cloned.Upstreams[i] = r.populateLineageWithJobRuns(upstream, jobRunDetails, result)
 	}
 
-	return result[lineage.JobName]
+	return cloned
 }
 
 func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {

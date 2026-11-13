@@ -273,6 +273,10 @@ func isPastSafeStart(node *scheduler.JobExecutionSummary, finding *BreachFinding
 	if finding == nil {
 		return false
 	}
+	if len(finding.RunBreachStates) > 0 {
+		state, ok := finding.RunBreachStates[node.Key()]
+		return ok && state.Status == scheduler.SLABreachCauseNotStarted
+	}
 	state, ok := finding.BreachStates[node.JobName]
 	if !ok || state.Status != scheduler.SLABreachCauseNotStarted {
 		return false

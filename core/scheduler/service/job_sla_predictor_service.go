@@ -347,11 +347,11 @@ func (s *JobSLAPredictorService) storePredictedSLABreach(ctx context.Context, jo
 // targetScheduledAt is the run stored as sla_predictor.job_scheduled_at, and therefore the
 // run that impacted-job deduplication keys on; both must resolve it the same way.
 func targetScheduledAt(jobTarget *scheduler.JobLineageSummary) time.Time {
-	if run := jobTarget.JobRuns[jobTarget.JobName]; run != nil {
+	if run := jobTarget.GetTargetRun(); run != nil {
 		return run.ScheduledAt
 	}
-	for _, jobRun := range jobTarget.JobRuns {
-		return jobRun.ScheduledAt
+	if runs := jobTarget.AllRuns(); len(runs) > 0 {
+		return runs[0].ScheduledAt
 	}
 	return time.Time{}
 }

@@ -191,10 +191,15 @@ func rcMakeLineage(jobName scheduler.JobName, tnnt tenant.Tenant, run *scheduler
 		JobName:   jobName,
 		Tenant:    tnnt,
 		IsEnabled: true,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobName: run},
 	}
+	lineage.RecordTargetRun(run)
+	var downstreamSched time.Time
+	if run != nil {
+		downstreamSched = run.ScheduledAt
+	}
+	downstreamKey := scheduler.NewJobRunKey(jobName, downstreamSched)
 	for _, upstream := range upstreams {
-		upstream.JobRuns[jobName] = upstream.JobRuns[upstream.JobName]
+		upstream.RecordUpstreamRun(downstreamKey, upstream.GetTargetRun())
 	}
 	if len(upstreams) > 0 {
 		lineage.Upstreams = upstreams

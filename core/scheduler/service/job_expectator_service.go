@@ -153,12 +153,30 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 }
 
 // selfParent is the immediate downstream job that led to currentJobWithLineage in the current
-// traversal - currentJobWithLineage's own run is keyed by that name in JobRuns, since
-// LineageResolver.BuildLineage keys a node's JobRuns by its immediate downstream
-// to support lineages where a shared upstream carries a distinct run per downstream path.
+// traversal. When called at the lineage root, currentJobWithLineage's own run is resolved via
+// GetTargetRun (or JobRuns[selfParent] for hand-constructed fixtures); recursive upstream hops
+// propagate the full downstream JobRunKey (JobName, ScheduledAt) via populateExpectedFinishTime.
 func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.JobName, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+	return s.populateExpectedFinishTime(scheduler.JobRunKey{JobName: selfParent}, true, currentJobWithLineage, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
+}
+
+func (s *JobExpectatorService) populateExpectedFinishTime(downstreamKey scheduler.JobRunKey, isRoot bool, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
+	if currentJobWithLineage == nil {
+		return nil
+	}
+
+	var currentJobRun *scheduler.JobRunSummary
+	if isRoot {
+		currentJobRun = currentJobWithLineage.GetTargetRun()
+		if currentJobRun == nil {
+			currentJobRun = currentJobWithLineage.GetRunForDownstream(downstreamKey)
+		}
+	} else {
+		currentJobRun = currentJobWithLineage.GetRunForDownstream(downstreamKey)
+	}
+
 	// pre condition check
-	if currentJobWithLineage == nil || currentJobWithLineage.GetRunForJob(selfParent) == nil {
+	if currentJobRun == nil {
 		// TODO: add metric to track how many times this happens
 		s.l.Error(fmt.Sprintf("[critical] no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
 		return nil
@@ -168,7 +186,6 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.J
 		return nil
 	}
 
-	currentJobRun := currentJobWithLineage.GetRunForJob(selfParent)
 	currentJobScheduleKey := scheduler.JobSchedule{
 		// TODO: add project name as well, PR: https://github.com/goto/optimus/pull/501
 		JobName:     currentJobWithLineage.JobName,
@@ -236,13 +253,14 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.J
 		Status:     FinishTimeStatusInprogress,
 		FinishTime: maxUpstreamExpectedFinishTime.Add(*estimatedDuration),
 	}
+	currentRunKey := scheduler.NewJobRunKey(currentJobWithLineage.JobName, currentJobRun.ScheduledAt)
 	for _, upstream := range currentJobWithLineage.Upstreams {
-		err := s.PopulateExpectedFinishTime(currentJobWithLineage.JobName, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
+		err := s.populateExpectedFinishTime(currentRunKey, false, upstream, jobRunExpectedFinishTimes, jobDurationsEstimation, referenceTime)
 		if err != nil {
 			return err
 		}
-		upstreamJobRun := upstream.GetRunForJob(currentJobWithLineage.JobName)
-		if upstream.JobRuns[currentJobWithLineage.JobName] == nil {
+		upstreamJobRun := upstream.GetRunForDownstream(currentRunKey)
+		if upstreamJobRun == nil {
 			s.l.Debug(fmt.Sprintf("no upstream job run found for job, skipping upstream in expected finish time calculation [job: %s, upstream_job: %s]", currentJobWithLineage.JobName, upstream.JobName))
 			continue
 		}
@@ -333,7 +351,7 @@ func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context,
 			continue
 		}
 
-		if run := lineage.GetRunForJob(jobSchedule.JobName); run != nil && (run.GetActualEndTime() == nil ||
+		if run := lineage.GetTargetRun(); run != nil && (run.GetActualEndTime() == nil ||
 			run.GetActualEndTime().After(referenceTime)) {
 			unfinishedJobSchedules = append(unfinishedJobSchedules, *jobSchedule)
 			unfinishedJobsWithLineageMap[jobSchedule.JobName] = lineage

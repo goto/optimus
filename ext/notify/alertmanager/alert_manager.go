@@ -55,7 +55,7 @@ var (
 
 	rootCauseAlertsDedupedCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: MetricRootCauseAlertsDeduped,
-	}, []string{"reason"})
+	}, []string{"reason", "team"})
 
 	eventsReceived = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name:        MetricNotificationQueue,
@@ -223,7 +223,7 @@ func (a *AlertManager) worker(ctx context.Context) {
 				a.logger.Error("failed to log event", "error", err)
 			}
 			if isDeduplicated {
-				a.countRootCauseAlert(e, rootCauseAlertsDedupedCounter, "")
+				a.countRootCauseAlert(e, rootCauseAlertsDedupedCounter, e.Labels[DefaultChannelLabel])
 				continue
 			}
 

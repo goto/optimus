@@ -28,7 +28,14 @@ type ServerConfig struct {
 	JobExpectatorConfig       JobExpectatorConfig       `mapstructure:"job_expectator"`
 	JobExecutionSummaryConfig JobExecutionSummaryConfig `mapstructure:"job_execution_summary"`
 	AirflowSync               AirflowSyncConfig         `mapstructure:"airflow_sync"`
+	AirflowClient             AirflowClientConfig       `mapstructure:"airflow_client"`
 	Completeness              CompletenessConfig        `mapstructure:"completeness"`
+}
+
+// AirflowClientConfig controls outbound Airflow REST API calls from Optimus server.
+type AirflowClientConfig struct {
+	RetryMax       int   `mapstructure:"retry_max" default:"3"`
+	RetryBackoffMs int64 `mapstructure:"retry_backoff_ms" default:"500"`
 }
 
 type UpstreamResolver struct {

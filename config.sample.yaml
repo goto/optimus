@@ -227,6 +227,12 @@ upstream_resolvers:
     # table stats path; omit or true → /dex/v2/tables/.../stats, false → /dex/tables/.../stats
     use_v2_endpoint: true
 
+# outbound Airflow REST API retry policy (replay worker, backfill, job run queries)
+airflow_client:
+  # Invoke retries up to retry_max attempts (default 3) with exponential backoff from retry_backoff_ms (default 500ms)
+  retry_max: 3
+  retry_backoff_ms: 500
+
 # how job replays are executed
 replay:
   replay_timeout_in_minutes: 180

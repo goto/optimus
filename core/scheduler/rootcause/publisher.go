@@ -291,12 +291,17 @@ func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, findi
 		if !isPastSafeStart(node, finding) {
 			continue
 		}
+		// the induced delay is how far past its latest safe start the node is — the same
+		// wait-family measure as the other delay reasons; it grows while the node stays
+		// stuck and freezes at the last observation once the node finally starts
+		evidence, overdueSeconds := waitingUpstreamEvidence(walk, node, finding, referenceTime)
 		detections = append(detections, scheduler.RootCauseDetection{
 			IncidentKey: nodeIncidentKey(node),
 			Reason: scheduler.RootCauseReasonDetail{
-				Reason:   scheduler.TierWaitingUpstream,
-				Status:   scheduler.ReasonStatusActive,
-				Evidence: waitingUpstreamEvidence(walk, node, finding, referenceTime),
+				Reason:              scheduler.TierWaitingUpstream,
+				Status:              scheduler.ReasonStatusActive,
+				InducedDelaySeconds: overdueSeconds,
+				Evidence:            evidence,
 			},
 			ImpactedJobs: impacted,
 		})
@@ -305,10 +310,11 @@ func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, findi
 }
 
 // waitingUpstreamEvidence records the facts behind a WAITING_UPSTREAM finding: why the
-// node counts as stuck and how far past its latest safe start it is. It measures no
-// delay of its own, so the reason's induced delay stays zero.
-func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary, finding *BreachFinding, referenceTime time.Time) *scheduler.ReasonEvidence {
+// node counts as stuck and how far past its latest safe start it is. The overdue time
+// doubles as the reason's induced delay.
+func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary, finding *BreachFinding, referenceTime time.Time) (*scheduler.ReasonEvidence, int) {
 	section := &scheduler.WaitingUpstreamEvidence{NodeState: string(node.State)}
+	overdueSeconds := 0
 	if state := finding.BreachStates[node.JobName]; state != nil {
 		if state.InferredSLA != nil {
 			section.InferredSLA = state.InferredSLA
@@ -317,7 +323,12 @@ func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.
 			section.EstimatedDurationSeconds = scheduler.IntPtr(int(state.EstimatedDuration.Seconds()))
 		}
 		if state.InferredSLA != nil && state.EstimatedDuration != nil {
-			section.LatestSafeStart = scheduler.TimePtr(state.InferredSLA.Add(-*state.EstimatedDuration))
+			safeStart := state.InferredSLA.Add(-*state.EstimatedDuration)
+			section.LatestSafeStart = scheduler.TimePtr(safeStart)
+			overdueSeconds = int(referenceTime.Sub(safeStart).Seconds())
+			if overdueSeconds < 0 {
+				overdueSeconds = 0
+			}
 		}
 	}
 	// the rule fires when every upstream is successful or never created;
@@ -333,7 +344,7 @@ func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.
 		ReferenceTime:   referenceTime.UTC(),
 		Rule:            scheduler.EvidenceRuleWaitingUpstreamPastSafeStart,
 		WaitingUpstream: section,
-	}
+	}, overdueSeconds
 }
 
 // isPastSafeStart reports whether the node's run is flagged NOT_STARTED by the inferred-SLA

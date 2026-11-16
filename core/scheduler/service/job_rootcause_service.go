@@ -447,7 +447,7 @@ func (s *JobRootCauseService) suppressAlert(reason scheduler.RootCauseReasonDeta
 
 func isDelayMeasuredReason(reason scheduler.SLABreachTier) bool {
 	switch reason {
-	case scheduler.TierRuntimeDelay, scheduler.TierSchedulerDelay, scheduler.TierThirdPartyDelay:
+	case scheduler.TierRuntimeDelay, scheduler.TierSchedulerDelay, scheduler.TierThirdPartyDelay, scheduler.TierWaitingUpstream:
 		return true
 	default:
 		return false

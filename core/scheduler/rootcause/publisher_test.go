@@ -549,6 +549,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 		matched := detectionsByReason(detections, scheduler.TierWaitingUpstream)
 		assert.Len(t, matched, 1)
 		assert.Equal(t, "job_b1", matched[0].IncidentKey.JobName.String())
+		// the overdue time doubles as the induced delay: safe start 11:30 (inferred SLA
+		// 12:00 minus its 30m estimate), reference time 90m past it
+		assert.Equal(t, int(90*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
 		// the evidence records why the node counts as stuck: its safe start was 11:30
 		// (inferred SLA 12:00 minus its 30m estimate) and the reference time is 90m past it
 		waiting := matched[0].Reason.Evidence.WaitingUpstream

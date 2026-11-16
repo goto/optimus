@@ -65,6 +65,110 @@ type RootCauseReasonDetail struct {
 	DelayScope    string `json:"delay_scope,omitempty"`
 	// MaxNodeInducedDelaySeconds is the representative job's own induced delay for job-scoped runtime reason
 	MaxNodeInducedDelaySeconds int `json:"max_node_induced_delay_seconds,omitempty"`
+	// Evidence records how InducedDelaySeconds was calculated.
+	// Optional and absent on older rows; never sent to alerting.
+	Evidence *ReasonEvidence `json:"evidence,omitempty"`
+}
+
+// Evidence rule names: which detector produced the reason and under which condition.
+const (
+	EvidenceRuleRuntimeJobOverThreshold        = "runtime_job_over_threshold"
+	EvidenceRuleRuntimeProjectSumOverThreshold = "runtime_project_sum_over_threshold"
+	EvidenceRuleSchedulerPathOverBudget        = "scheduler_path_over_budget"
+	EvidenceRuleThirdPartyWaitOverThreshold    = "third_party_wait_over_threshold"
+	EvidenceRuleWaitingUpstreamPastSafeStart   = "waiting_upstream_past_safe_start"
+	EvidenceRuleAggressiveSLANoCause           = "aggressive_sla_no_cause"
+)
+
+const (
+	// MaxEvidenceComponents caps the component list stored per reason; components beyond the cap are dropped but counted in ComponentsTotal.
+	// The list is sorted largest first, so the cap keeps the biggest contributors.
+	MaxEvidenceComponents = 20
+)
+
+// Source markers for evidence times: which candidate supplied a start or end.
+const (
+	EvidenceSourceActualEnd       = "actual_end"
+	EvidenceSourceReferenceTime   = "reference_time"
+	EvidenceSourceWaitEnd         = "wait_end"
+	EvidenceSourceScheduledAt     = "scheduled_at"
+	EvidenceSourceUpstreamEnd     = "upstream_end"
+	EvidenceSourceDailyBoundary   = "daily_boundary"
+	EvidenceSourceSensorWaitStart = "sensor_wait_start"
+)
+
+// ReasonEvidence is the calculation record of one reason's induced delay.
+// Each reason fills only the fields its rule needs;
+// TotalSeconds always equals the reason's InducedDelaySeconds when set.
+type ReasonEvidence struct {
+	ReferenceTime     time.Time           `json:"reference_time"`
+	Rule              string              `json:"rule"`
+	ThresholdSeconds  int                 `json:"threshold_seconds,omitempty"`
+	BudgetSeconds     int                 `json:"budget_seconds,omitempty"`
+	TotalSeconds      int                 `json:"total_seconds,omitempty"`
+	MaxNode           string              `json:"max_node,omitempty"`
+	Boundary          *time.Time          `json:"boundary,omitempty"`
+	ComponentsTotal   int                 `json:"components_total,omitempty"`
+	Components        []EvidenceComponent `json:"components,omitempty"`
+	SkippedNoBaseline []string            `json:"skipped_no_baseline,omitempty"`
+	Facts             *EvidenceFacts      `json:"facts,omitempty"`
+}
+
+type EvidenceComponent struct {
+	Project        string     `json:"project"`
+	Job            string     `json:"job"`
+	InducedSeconds int        `json:"induced_seconds"`
+	ScheduledAt    *time.Time `json:"scheduled_at,omitempty"`
+	// runtime-delay fields
+	TaskStart       *time.Time `json:"task_start,omitempty"`
+	End             *time.Time `json:"end,omitempty"`
+	EndSource       string     `json:"end_source,omitempty"`
+	ObservedSeconds *int       `json:"observed_seconds,omitempty"`
+	BaselineSeconds *int       `json:"baseline_seconds,omitempty"`
+	// scheduler-delay fields
+	UpstreamJob    string     `json:"upstream_job,omitempty"`
+	UpstreamEnd    *time.Time `json:"upstream_end,omitempty"`
+	WaitFrom       *time.Time `json:"wait_from,omitempty"`
+	WaitFromSource string     `json:"wait_from_source,omitempty"`
+	// third-party fields
+	Sensor string `json:"sensor,omitempty"`
+}
+
+type EvidenceFacts struct {
+	NodeState                string     `json:"node_state,omitempty"`
+	InferredSLA              *time.Time `json:"inferred_sla,omitempty"`
+	EstimatedDurationSeconds *int       `json:"estimated_duration_seconds,omitempty"`
+	LatestSafeStart          *time.Time `json:"latest_safe_start,omitempty"`
+	OverdueSeconds           *int       `json:"overdue_seconds,omitempty"`
+	SLATime                  *time.Time `json:"sla_time,omitempty"`
+	End                      *time.Time `json:"end,omitempty"`
+	EndSource                string     `json:"end_source,omitempty"`
+	OvershootSeconds         *int       `json:"overshoot_seconds,omitempty"`
+	TaskStart                *time.Time `json:"task_start,omitempty"`
+	BaselineSeconds          *int       `json:"baseline_seconds,omitempty"`
+}
+
+func TimePtr(t time.Time) *time.Time { return &[]time.Time{t.UTC()}[0] }
+
+func IntPtr(v int) *int { return &v }
+
+// CapComponents sorts components by induced delay (largest first, ties by project then
+// job) and truncates the list to MaxEvidenceComponents, reporting the pre-cap count.
+func CapComponents(components []EvidenceComponent) ([]EvidenceComponent, int) {
+	total := len(components)
+	sort.SliceStable(components, func(i, j int) bool {
+		if components[i].InducedSeconds != components[j].InducedSeconds {
+			return components[i].InducedSeconds > components[j].InducedSeconds
+		}
+		if components[i].Project != components[j].Project {
+			return components[i].Project < components[j].Project
+		}
+		return components[i].Job < components[j].Job
+	})
+	if total > MaxEvidenceComponents {
+		components = components[:MaxEvidenceComponents]
+	}
+	return components, total
 }
 
 type RootCauseDetails struct {
@@ -143,7 +247,16 @@ func GroupDetections(detections []RootCauseDetection) []*SLABreachIncidentWithIm
 			}
 			slot := &incident.Details.Reasons[j]
 			if detection.Reason.InducedDelaySeconds > slot.InducedDelaySeconds {
-				slot.InducedDelaySeconds = detection.Reason.InducedDelaySeconds
+				winner := detection.Reason
+				slot.InducedDelaySeconds = winner.InducedDelaySeconds
+				slot.IsJobFinished = winner.IsJobFinished
+				slot.DelayScope = winner.DelayScope
+				slot.MaxNodeInducedDelaySeconds = winner.MaxNodeInducedDelaySeconds
+				slot.Evidence = winner.Evidence
+			} else if detection.Reason.InducedDelaySeconds == slot.InducedDelaySeconds && slot.Evidence == nil {
+				// equal numbers: keep the first evidence when the slot has one,
+				// else adopt the incoming one
+				slot.Evidence = detection.Reason.Evidence
 			}
 			if len(detection.Reason.BlockedOnSensors) > 0 {
 				slot.BlockedOnSensors = detection.Reason.BlockedOnSensors

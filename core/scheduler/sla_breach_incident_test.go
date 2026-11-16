@@ -1,10 +1,12 @@
 package scheduler_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/tenant"
@@ -61,6 +63,8 @@ func TestGroupDetections(t *testing.T) {
 
 	t.Run("merges duplicate reasons keeping max induced delay and freshest evidence", func(t *testing.T) {
 		key := incidentKey("p_proj", "job_root", baseTime)
+		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 31 * 60}
+		secondEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, TotalSeconds: 45 * 60, MaxNode: "p_proj/job_root"}
 		detections := []scheduler.RootCauseDetection{
 			{
 				IncidentKey: key,
@@ -68,14 +72,19 @@ func TestGroupDetections(t *testing.T) {
 					Reason:              scheduler.TierRuntimeDelay,
 					Status:              scheduler.ReasonStatusActive,
 					InducedDelaySeconds: 31 * 60,
+					DelayScope:          scheduler.DelayScopeJob,
+					Evidence:            firstEvidence,
 				},
 			},
 			{
 				IncidentKey: key,
 				Reason: scheduler.RootCauseReasonDetail{
-					Reason:              scheduler.TierRuntimeDelay,
-					Status:              scheduler.ReasonStatusActive,
-					InducedDelaySeconds: 45 * 60,
+					Reason:                     scheduler.TierRuntimeDelay,
+					Status:                     scheduler.ReasonStatusActive,
+					InducedDelaySeconds:        45 * 60,
+					DelayScope:                 scheduler.DelayScopeProject,
+					MaxNodeInducedDelaySeconds: 20 * 60,
+					Evidence:                   secondEvidence,
 				},
 				ImpactedJobs: []scheduler.ImpactedJob{
 					{ProjectName: "p_down", JobName: "job_a", ScheduledAt: baseTime},
@@ -91,6 +100,41 @@ func TestGroupDetections(t *testing.T) {
 		assert.Equal(t, 45*60, reasons[0].InducedDelaySeconds)
 		assert.Equal(t, 45*60, incidents[0].Incident.MaxInducedDelaySeconds)
 		assert.Len(t, incidents[0].Impacts, 1)
+		// the larger measurement wins the whole calculation, so the evidence can
+		// never disagree with the stored number
+		assert.Equal(t, scheduler.DelayScopeProject, reasons[0].DelayScope)
+		assert.Equal(t, 20*60, reasons[0].MaxNodeInducedDelaySeconds)
+		assert.Same(t, secondEvidence, reasons[0].Evidence)
+	})
+
+	t.Run("equal delays keep the first evidence", func(t *testing.T) {
+		key := incidentKey("p_proj", "job_root", baseTime)
+		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 45 * 60}
+		detections := []scheduler.RootCauseDetection{
+			{
+				IncidentKey: key,
+				Reason: scheduler.RootCauseReasonDetail{
+					Reason:              scheduler.TierRuntimeDelay,
+					Status:              scheduler.ReasonStatusActive,
+					InducedDelaySeconds: 45 * 60,
+					Evidence:            firstEvidence,
+				},
+			},
+			{
+				IncidentKey: key,
+				Reason: scheduler.RootCauseReasonDetail{
+					Reason:              scheduler.TierRuntimeDelay,
+					Status:              scheduler.ReasonStatusActive,
+					InducedDelaySeconds: 45 * 60,
+				},
+			},
+		}
+
+		incidents := scheduler.GroupDetections(detections)
+
+		reasons := incidents[0].Incident.Details.Reasons
+		assert.Len(t, reasons, 1)
+		assert.Same(t, firstEvidence, reasons[0].Evidence)
 	})
 
 	t.Run("deduplicates impacted jobs across detections", func(t *testing.T) {
@@ -227,6 +271,24 @@ func TestMergeResolvedReasons(t *testing.T) {
 		assert.Equal(t, 2400, merged.MaxInducedDelaySeconds)
 	})
 
+	t.Run("a resolved reason keeps its evidence", func(t *testing.T) {
+		evidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 2400}
+		fresh := &scheduler.SLABreachIncident{Key: key}
+		previous := &scheduler.SLABreachIncident{
+			Key: key,
+			Details: scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{
+				Reason: scheduler.TierRuntimeDelay, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: 2400, Evidence: evidence,
+			}}},
+		}
+
+		merged := scheduler.MergeResolvedReasons(fresh, previous)
+
+		reasons := merged.Details.Reasons
+		assert.Len(t, reasons, 1)
+		assert.Equal(t, scheduler.ReasonStatusResolved, reasons[0].Status)
+		assert.Same(t, evidence, reasons[0].Evidence, "the last known calculation stays with the resolved reason")
+	})
+
 	t.Run("a resolved reason that comes back is active again without duplication", func(t *testing.T) {
 		fresh := &scheduler.SLABreachIncident{
 			Key:     key,
@@ -275,5 +337,52 @@ func TestMergeResolvedReasons(t *testing.T) {
 		assert.Len(t, previous.Details.Reasons, 1)
 		assert.Equal(t, scheduler.ReasonStatusActive, previous.Details.Reasons[0].Status, "previous keeps its original status")
 		assert.Len(t, fresh.Details.Reasons, 0)
+	})
+}
+
+func TestRootCauseDetailsEvidenceSerialization(t *testing.T) {
+	safeStart := time.Date(2026, 10, 22, 2, 0, 0, 0, time.UTC)
+
+	t.Run("evidence round-trips through the details JSON", func(t *testing.T) {
+		details := scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{
+			Reason:              scheduler.TierRuntimeDelay,
+			Status:              scheduler.ReasonStatusActive,
+			InducedDelaySeconds: 2100,
+			DelayScope:          scheduler.DelayScopeJob,
+			Evidence: &scheduler.ReasonEvidence{
+				ReferenceTime:    safeStart,
+				Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
+				ThresholdSeconds: 1800,
+				TotalSeconds:     2100,
+				ComponentsTotal:  1,
+				Components: []scheduler.EvidenceComponent{{
+					Project:         "p_root",
+					Job:             "job_upstream",
+					InducedSeconds:  2100,
+					TaskStart:       scheduler.TimePtr(safeStart),
+					End:             scheduler.TimePtr(safeStart.Add(45 * time.Minute)),
+					EndSource:       scheduler.EvidenceSourceActualEnd,
+					ObservedSeconds: scheduler.IntPtr(2700),
+					BaselineSeconds: scheduler.IntPtr(600),
+				}},
+			},
+		}}}
+
+		raw, err := json.Marshal(details)
+		require.NoError(t, err)
+		var decoded scheduler.RootCauseDetails
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+
+		assert.Equal(t, details, decoded)
+	})
+
+	t.Run("rows stored before evidence still unmarshal", func(t *testing.T) {
+		raw := []byte(`{"reasons":[{"reason":"RUNTIME_DELAY","status":"active","induced_delay_seconds":2400}]}`)
+
+		var decoded scheduler.RootCauseDetails
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+
+		assert.Len(t, decoded.Reasons, 1)
+		assert.Nil(t, decoded.Reasons[0].Evidence, "absent evidence reads as nil, not an error")
 	})
 }

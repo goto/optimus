@@ -1436,3 +1436,42 @@ func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
 		notifier.AssertExpectations(t)
 	})
 }
+
+func TestDelayChanged(t *testing.T) {
+	runtimeReason := func(delay int, status scheduler.ReasonStatus) scheduler.RootCauseReasonDetail {
+		return scheduler.RootCauseReasonDetail{
+			Reason: scheduler.TierRuntimeDelay, Status: status, InducedDelaySeconds: delay,
+		}
+	}
+	previousWith := func(reasons ...scheduler.RootCauseReasonDetail) *scheduler.SLABreachIncident {
+		return &scheduler.SLABreachIncident{Details: scheduler.RootCauseDetails{Reasons: reasons}}
+	}
+
+	t.Run("no previous incident is a change", func(t *testing.T) {
+		assert.True(t, service.DelayChangedForTest(nil, runtimeReason(3600, scheduler.ReasonStatusActive)))
+	})
+
+	t.Run("a new reason is a change", func(t *testing.T) {
+		previous := previousWith(runtimeReason(3600, scheduler.ReasonStatusActive))
+		assert.True(t, service.DelayChangedForTest(previous, runtimeReasonFor(scheduler.TierThirdPartyDelay, 7200)))
+	})
+
+	t.Run("an unchanged number is not a change", func(t *testing.T) {
+		previous := previousWith(runtimeReason(3600, scheduler.ReasonStatusActive))
+		assert.False(t, service.DelayChangedForTest(previous, runtimeReason(3600, scheduler.ReasonStatusActive)))
+	})
+
+	t.Run("a changed number is a change", func(t *testing.T) {
+		previous := previousWith(runtimeReason(3600, scheduler.ReasonStatusActive))
+		assert.True(t, service.DelayChangedForTest(previous, runtimeReason(4200, scheduler.ReasonStatusActive)))
+	})
+
+	t.Run("a reason that comes back after resolution is a change", func(t *testing.T) {
+		previous := previousWith(runtimeReason(3600, scheduler.ReasonStatusResolved))
+		assert.True(t, service.DelayChangedForTest(previous, runtimeReason(3600, scheduler.ReasonStatusActive)))
+	})
+}
+
+func runtimeReasonFor(reason scheduler.SLABreachTier, delay int) scheduler.RootCauseReasonDetail {
+	return scheduler.RootCauseReasonDetail{Reason: reason, Status: scheduler.ReasonStatusActive, InducedDelaySeconds: delay}
+}

@@ -32,6 +32,8 @@ func ptr(t time.Time) *time.Time { return &t }
 
 func strPtr(s string) *string { return &s }
 
+func durPtr(d time.Duration) *time.Duration { return &d }
+
 // makeRun builds a JobRunSummary the way the resolver does for a resolved run: SLATime is
 // always set, status is derived from the given timestamps plus an explicit job status.
 func makeRun(jobName scheduler.JobName, scheduledAt time.Time, taskStart, taskEnd *time.Time, status string) *scheduler.JobRunSummary {
@@ -418,6 +420,30 @@ func TestPublisher_Evaluate(t *testing.T) {
 		// (11:00 - 10:45) + (10:40 - 09:15) = 15m + 85m = 100 minutes
 		assert.Equal(t, int(100*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
 		assert.False(t, matched[0].Reason.IsJobFinished, "the target is still running")
+
+		// the evidence decomposes the 100m into per-node waits against the path allowance
+		evidence := matched[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, scheduler.EvidenceRuleSchedulerPathOverBudget, evidence.Rule)
+		assert.Equal(t, 450, evidence.ThresholdSeconds, "2.5 minutes per depth, three measured nodes")
+		schedulerSection := evidence.Scheduler
+		assert.NotNil(t, schedulerSection)
+		assert.Equal(t, 3, schedulerSection.CalculationComponentsTotal)
+		// sorted by wait, largest first
+		assert.Equal(t, "job_b1", schedulerSection.CalculationComponents[0].Job)
+		assert.Equal(t, int(85*time.Minute/time.Second), schedulerSection.CalculationComponents[0].InducedSeconds)
+		assert.Equal(t, scheduler.EvidenceSourceUpstreamEnd, schedulerSection.CalculationComponents[0].WaitFromSource)
+		assert.Equal(t, "job_a2", schedulerSection.CalculationComponents[0].UpstreamJob)
+		assert.Equal(t, testBaseTime.Add(-45*time.Minute).UTC(), *schedulerSection.CalculationComponents[0].UpstreamEnd)
+		assert.Equal(t, testBaseTime.Add(40*time.Minute).UTC(), *schedulerSection.CalculationComponents[0].TaskStart)
+		assert.Equal(t, "job_target", schedulerSection.CalculationComponents[1].Job)
+		assert.Equal(t, int(15*time.Minute/time.Second), schedulerSection.CalculationComponents[1].InducedSeconds)
+		assert.Equal(t, "job_b1", schedulerSection.CalculationComponents[1].UpstreamJob)
+		// a2 has no finished upstream, so its wait is zero and carries no upstream fields
+		assert.Equal(t, "job_a2", schedulerSection.CalculationComponents[2].Job)
+		assert.Equal(t, 0, schedulerSection.CalculationComponents[2].InducedSeconds)
+		assert.Empty(t, schedulerSection.CalculationComponents[2].UpstreamJob)
+		assert.Nil(t, schedulerSection.CalculationComponents[2].UpstreamEnd)
 	})
 
 	t.Run("no scheduler charge behind a failed upstream; tier 4 fires instead", func(t *testing.T) {
@@ -472,6 +498,19 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, 7*3600, detections[0].Reason.InducedDelaySeconds)
 		// the sensor wait is Tier 3's finding; Tier 5 must not double-report the stuck target
 		assert.Empty(t, detectionsByReason(detections, scheduler.TierWaitingUpstream))
+
+		// the evidence shows the boundary, the wait window and which end was used
+		evidence := detections[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, scheduler.EvidenceRuleThirdPartyWaitOverThreshold, evidence.Rule)
+		thirdParty := evidence.ThirdParty
+		assert.NotNil(t, thirdParty)
+		assert.Equal(t, time.Date(2026, 10, 25, 18, 0, 0, 0, time.UTC), thirdParty.Boundary)
+		assert.Equal(t, "wait_dex_event_delivery", thirdParty.Sensor)
+		assert.Equal(t, time.Date(2026, 10, 25, 20, 0, 0, 0, time.UTC), thirdParty.WaitFrom)
+		assert.Equal(t, scheduler.EvidenceSourceSensorWaitStart, thirdParty.WaitFromSource)
+		assert.Equal(t, refTime, thirdParty.End)
+		assert.Equal(t, scheduler.EvidenceSourceReferenceTime, thirdParty.EndSource)
 	})
 
 	t.Run("tier 5: stuck node with successful upstreams becomes the incident", func(t *testing.T) {
@@ -494,8 +533,12 @@ func TestPublisher_Evaluate(t *testing.T) {
 		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
 			"job_b1": {
 				JobName: "job_b1",
-				Status:  scheduler.SLABreachCauseNotStarted,
-				JobRun:  scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+				JobSLAState: scheduler.JobSLAState{
+					InferredSLA:       ptr(testBaseTime.Add(2 * time.Hour)),
+					EstimatedDuration: durPtr(30 * time.Minute),
+				},
+				Status: scheduler.SLABreachCauseNotStarted,
+				JobRun: scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
 			},
 		}
 		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
@@ -506,6 +549,16 @@ func TestPublisher_Evaluate(t *testing.T) {
 		matched := detectionsByReason(detections, scheduler.TierWaitingUpstream)
 		assert.Len(t, matched, 1)
 		assert.Equal(t, "job_b1", matched[0].IncidentKey.JobName.String())
+		// the evidence records why the node counts as stuck: its safe start was 11:30
+		// (inferred SLA 12:00 minus its 30m estimate) and the reference time is 90m past it
+		waiting := matched[0].Reason.Evidence.WaitingUpstream
+		assert.NotNil(t, waiting)
+		assert.Equal(t, scheduler.EvidenceRuleWaitingUpstreamPastSafeStart, matched[0].Reason.Evidence.Rule)
+		assert.Equal(t, string(scheduler.StateNotScheduled), waiting.NodeState)
+		assert.Equal(t, testBaseTime.Add(2*time.Hour).UTC(), *waiting.InferredSLA)
+		assert.Equal(t, int(30*time.Minute/time.Second), *waiting.EstimatedDurationSeconds)
+		assert.Equal(t, testBaseTime.Add(90*time.Minute).UTC(), *waiting.LatestSafeStart)
+		assert.False(t, waiting.HasMissingUpstreamRun, "the upstream succeeded; the node waits on nothing missing")
 	})
 
 	t.Run("tier 5 skipped while the upstream is still running; tier 1 reports the slow run", func(t *testing.T) {
@@ -552,6 +605,19 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, scheduler.TierAggressiveSLA, detections[0].Reason.Reason)
 		assert.Equal(t, "job_target", detections[0].IncidentKey.JobName.String())
 		assert.Equal(t, "p_root", detections[0].IncidentKey.ProjectName.String())
+
+		// the evidence records the SLA, the end used (the reference time, the run is still
+		// going) and the target's own baseline for comparison
+		evidence := detections[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, scheduler.EvidenceRuleAggressiveSLANoCause, evidence.Rule)
+		aggressive := evidence.AggressiveSLA
+		assert.Equal(t, testBaseTime.Add(2*time.Hour).UTC(), aggressive.TargetSLATime)
+		assert.Equal(t, referenceTime.UTC(), *aggressive.End)
+		assert.Equal(t, scheduler.EvidenceSourceReferenceTime, aggressive.EndSource)
+		assert.Equal(t, int(time.Hour/time.Second), aggressive.LateBySeconds)
+		assert.Equal(t, testBaseTime.UTC(), *aggressive.TaskStart)
+		assert.Equal(t, int(4*time.Hour/time.Second), *aggressive.BaselineSeconds)
 	})
 
 	t.Run("an in-flight lineage keeps the finished history behind the blocking frontier", func(t *testing.T) {

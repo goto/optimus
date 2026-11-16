@@ -230,6 +230,35 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, int(35*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
 	})
 
+	t.Run("a job without a baseline is skipped instead of counting its whole runtime", func(t *testing.T) {
+		// the upstream ran 45m but has no baseline entry: with nothing to compare
+		// against, its whole runtime must not read as induced delay
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		historical := map[scheduler.JobName]time.Duration{"job_target": targetBaseline}
+
+		detections := eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// a zero baseline is unusable data and skips the job the same way
+		historical["job_upstream"] = 0
+		detections = eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// the same run with a real baseline is measured again
+		historical["job_upstream"] = 10 * time.Minute
+		detections = eval(target, historical, referenceTime)
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.Equal(t, "job_upstream", matched[0].IncidentKey.JobName.String())
+		assert.Equal(t, int(35*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+	})
+
 	t.Run("tier 1 conditions B and C: project flat sum fires for the max-delayed project only", func(t *testing.T) {
 		// chain target <- a1(p_a) <- a2(p_a) <- b1(p_b); no job except b1 crosses 30m alone,
 		// p_a flat-sums past the threshold and p_b's b1 fires individually — so p_a is the

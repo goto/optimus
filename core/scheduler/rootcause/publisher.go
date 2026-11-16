@@ -96,9 +96,9 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	chain := p.causeChain(walk, ev.Finding)
 
 	detections := p.tierFailedUpstream(walk, impacted)
-	detections = append(detections, p.tierWaitingUpstream(walk, ev.Finding, impacted)...)
+	detections = append(detections, p.tierWaitingUpstream(walk, ev.Finding, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
-	detections = append(detections, p.tierSchedulerDelay(walk, impacted)...)
+	detections = append(detections, p.tierSchedulerDelay(walk, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
 
 	// if nothing explains the breach, the SLA is too aggressive for what the lineage
@@ -110,12 +110,45 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 			return nil
 		}
 		return []scheduler.RootCauseDetection{{
-			IncidentKey:  incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
-			Reason:       scheduler.RootCauseReasonDetail{Reason: scheduler.TierAggressiveSLA, Status: scheduler.ReasonStatusActive},
+			IncidentKey: incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:   scheduler.TierAggressiveSLA,
+				Status:   scheduler.ReasonStatusActive,
+				Evidence: aggressiveSLAEvidence(targetNode, targetRun, ev),
+			},
 			ImpactedJobs: impacted,
 		}}
 	}
 	return detections
+}
+
+// aggressiveSLAEvidence records the facts behind an AGGRESSIVE_SLA finding: the target
+// is past its SLA with no reason explanation, so the evidence shows the SLA, when the
+// run ended (or how far it would have to run), and its own baseline for comparison.
+func aggressiveSLAEvidence(targetNode *scheduler.JobExecutionSummary, targetRun *scheduler.JobRunSummary, ev TargetEvaluation) *scheduler.ReasonEvidence {
+	endTime := ev.ReferenceTime
+	endSource := scheduler.EvidenceSourceReferenceTime
+	if actualEnd := targetRun.GetActualEndTime(); actualEnd != nil {
+		endTime = *actualEnd
+		endSource = scheduler.EvidenceSourceActualEnd
+	}
+	section := &scheduler.AggressiveSLAEvidence{
+		TargetSLATime: *targetRun.SLATime,
+		End:           scheduler.TimePtr(endTime),
+		EndSource:     endSource,
+		LateBySeconds: int(endTime.Sub(*targetRun.SLATime).Seconds()),
+	}
+	if targetRun.TaskStartTime != nil {
+		section.TaskStart = targetRun.TaskStartTime
+	}
+	if baseline, found := ev.HistoricalByJob[targetNode.JobName]; found && baseline > 0 {
+		section.BaselineSeconds = scheduler.IntPtr(int(baseline.Seconds()))
+	}
+	return &scheduler.ReasonEvidence{
+		ReferenceTime: ev.ReferenceTime.UTC(),
+		Rule:          scheduler.EvidenceRuleAggressiveSLANoCause,
+		AggressiveSLA: section,
+	}
 }
 
 func breachedSLA(run *scheduler.JobRunSummary, referenceTime time.Time) bool {
@@ -241,7 +274,7 @@ func (*Publisher) tierFailedUpstream(walk *scheduler.LineageWalkResult, impacted
 // missing entirely (uncreated runs, depends_on_past self-waits).
 // Nodes whose upstreams failed are FAILED_UPSTREAM's finding; nodes waiting on a
 // still-running upstream are just normal waiting.
-func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, finding *BreachFinding, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, finding *BreachFinding, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	var detections []scheduler.RootCauseDetection
 	for _, node := range walk.Nodes {
 		if !isStuckState(node) {
@@ -259,12 +292,48 @@ func (p *Publisher) tierWaitingUpstream(walk *scheduler.LineageWalkResult, findi
 			continue
 		}
 		detections = append(detections, scheduler.RootCauseDetection{
-			IncidentKey:  nodeIncidentKey(node),
-			Reason:       scheduler.RootCauseReasonDetail{Reason: scheduler.TierWaitingUpstream, Status: scheduler.ReasonStatusActive},
+			IncidentKey: nodeIncidentKey(node),
+			Reason: scheduler.RootCauseReasonDetail{
+				Reason:   scheduler.TierWaitingUpstream,
+				Status:   scheduler.ReasonStatusActive,
+				Evidence: waitingUpstreamEvidence(walk, node, finding, referenceTime),
+			},
 			ImpactedJobs: impacted,
 		})
 	}
 	return detections
+}
+
+// waitingUpstreamEvidence records the facts behind a WAITING_UPSTREAM finding: why the
+// node counts as stuck and how far past its latest safe start it is. It measures no
+// delay of its own, so the reason's induced delay stays zero.
+func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary, finding *BreachFinding, referenceTime time.Time) *scheduler.ReasonEvidence {
+	section := &scheduler.WaitingUpstreamEvidence{NodeState: string(node.State)}
+	if state := finding.BreachStates[node.JobName]; state != nil {
+		if state.InferredSLA != nil {
+			section.InferredSLA = state.InferredSLA
+		}
+		if state.EstimatedDuration != nil {
+			section.EstimatedDurationSeconds = scheduler.IntPtr(int(state.EstimatedDuration.Seconds()))
+		}
+		if state.InferredSLA != nil && state.EstimatedDuration != nil {
+			section.LatestSafeStart = scheduler.TimePtr(state.InferredSLA.Add(-*state.EstimatedDuration))
+		}
+	}
+	// the rule fires when every upstream is successful or never created;
+	// HasMissingUpstreamRun distinguishes the two cases so the reader knows
+	// whether the node is waiting on an upstream run that was never created
+	for _, upstreamKey := range walk.UpstreamsByKey[node.Key()] {
+		if upstream, ok := walk.NodesByKey[upstreamKey]; ok && upstream.State == scheduler.StateNotScheduled {
+			section.HasMissingUpstreamRun = true
+			break
+		}
+	}
+	return &scheduler.ReasonEvidence{
+		ReferenceTime:   referenceTime.UTC(),
+		Rule:            scheduler.EvidenceRuleWaitingUpstreamPastSafeStart,
+		WaitingUpstream: section,
+	}
 }
 
 // isPastSafeStart reports whether the node's run is flagged NOT_STARTED by the inferred-SLA
@@ -336,12 +405,16 @@ func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, 
 		}
 
 		waitStart := boundary
+		waitFromSource := scheduler.EvidenceSourceDailyBoundary
 		if node.JobRunSummary.WaitStartTime != nil && node.JobRunSummary.WaitStartTime.After(boundary) {
 			waitStart = *node.JobRunSummary.WaitStartTime
+			waitFromSource = scheduler.EvidenceSourceSensorWaitStart
 		}
 		waitEnd := referenceTime
+		endSource := scheduler.EvidenceSourceReferenceTime
 		if node.JobRunSummary.WaitEndTime != nil {
 			waitEnd = *node.JobRunSummary.WaitEndTime
+			endSource = scheduler.EvidenceSourceWaitEnd
 		}
 		wait := waitEnd.Sub(waitStart)
 		if wait <= p.config.ThirdPartyDelayThreshold {
@@ -364,6 +437,19 @@ func (p *Publisher) tierThirdPartyDelay(chain []*scheduler.JobExecutionSummary, 
 				SourceType:          thirdPartyType,
 				// a sensor wait is finished once its wait end time exists
 				IsJobFinished: node.JobRunSummary.WaitEndTime != nil,
+				Evidence: &scheduler.ReasonEvidence{
+					ReferenceTime:    referenceTime.UTC(),
+					Rule:             scheduler.EvidenceRuleThirdPartyWaitOverThreshold,
+					ThresholdSeconds: int(p.config.ThirdPartyDelayThreshold.Seconds()),
+					ThirdParty: &scheduler.ThirdPartyEvidence{
+						Sensor:         *sensorName,
+						Boundary:       boundary.UTC(),
+						WaitFrom:       waitStart.UTC(),
+						WaitFromSource: waitFromSource,
+						End:            waitEnd.UTC(),
+						EndSource:      endSource,
+					},
+				},
 			},
 			ImpactedJobs: impacted,
 		})
@@ -395,7 +481,7 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 // ExecutionSummary fills for finished gating paths) with the same formula the summary
 // uses: the wait from the later of the node's schedule and its latest-finished upstream's
 // end until the task start.
-func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	gatingPath := walk.GatingPath()
 	if len(gatingPath) == 0 {
 		return nil
@@ -421,12 +507,17 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impact
 	}
 
 	var total time.Duration
+	components := make([]scheduler.SchedulerComponent, 0, len(measured))
 	for _, node := range measured {
-		total += nodeSchedulingDelay(walk, node)
+		obs := observeScheduling(walk, node)
+		total += obs.Delay
+		components = append(components, schedulingComponent(node, obs))
 	}
-	if budget := time.Duration(p.schedulerDelayBudget(len(measured))) * time.Second; total <= budget {
+	budget := time.Duration(p.schedulerDelayBudget(len(measured))) * time.Second
+	if total <= budget {
 		return nil
 	}
+	capped, componentsTotal := scheduler.CapComponents(components)
 
 	targetNode := walk.Nodes[0]
 	return []scheduler.RootCauseDetection{{
@@ -436,33 +527,82 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impact
 			Status:              scheduler.ReasonStatusActive,
 			InducedDelaySeconds: int(total.Seconds()),
 			IsJobFinished:       targetNode.JobRunSummary.IsFinished(),
+			Evidence: &scheduler.ReasonEvidence{
+				ReferenceTime: referenceTime.UTC(),
+				Rule:          scheduler.EvidenceRuleSchedulerPathOverBudget,
+				// the path's allowance is the reason's threshold: the per-depth
+				// minutes scaled by the number of measured nodes
+				ThresholdSeconds: int(budget.Seconds()),
+				Scheduler: &scheduler.SchedulerEvidence{
+					CalculationComponentsTotal: componentsTotal,
+					CalculationComponents:      capped,
+				},
+			},
 		},
 		ImpactedJobs: impacted,
 	}}
 }
 
-// nodeSchedulingDelay is one node's scheduler-owned wait: from the later of its own
+// schedulingObservation carries the pieces behind one node's scheduler-owned wait, so the
+// evidence can show which upstream end (or schedule) the wait was measured from.
+type schedulingObservation struct {
+	Delay          time.Duration
+	Upstream       *scheduler.JobExecutionSummary
+	UpstreamEnd    *time.Time
+	WaitFrom       time.Time
+	WaitFromSource string
+}
+
+// observeScheduling is one node's scheduler-owned wait: from the later of its own
 // schedule and its latest-finished upstream's end until the task started. A node with no
 // finished upstream contributes nothing — a wait with no completed dependency behind it
 // belongs to the missing upstream, not the scheduler; the same holds for a wait behind a
 // failed upstream, whose end time precedes the wait and clamps the delay to zero.
-func nodeSchedulingDelay(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) time.Duration {
+func observeScheduling(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) schedulingObservation {
+	obs := schedulingObservation{}
 	run := node.JobRunSummary
 	if run.TaskStartTime == nil {
-		return 0
+		return obs
 	}
-	upstream := latestFinishedUpstream(walk, node)
-	if upstream == nil {
-		return 0
+	obs.Upstream = latestFinishedUpstream(walk, node)
+	if obs.Upstream == nil {
+		return obs
 	}
-	delay := run.TaskStartTime.Sub(run.ScheduledAt)
-	if upstreamEnd := upstream.JobRunSummary.GetActualEndTime(); upstreamEnd.After(run.ScheduledAt) {
-		delay = run.TaskStartTime.Sub(*upstreamEnd)
+	obs.UpstreamEnd = obs.Upstream.JobRunSummary.GetActualEndTime()
+	obs.WaitFrom = run.ScheduledAt
+	obs.WaitFromSource = scheduler.EvidenceSourceScheduledAt
+	if obs.UpstreamEnd != nil && obs.UpstreamEnd.After(run.ScheduledAt) {
+		obs.WaitFrom = *obs.UpstreamEnd
+		obs.WaitFromSource = scheduler.EvidenceSourceUpstreamEnd
 	}
-	if delay < 0 {
-		return 0
+	obs.Delay = run.TaskStartTime.Sub(obs.WaitFrom)
+	if obs.Delay < 0 {
+		obs.Delay = 0
 	}
-	return delay
+	return obs
+}
+
+// schedulingComponent is one measured node's scheduler wait as an evidence component;
+// zero-wait nodes are kept (they still count toward the depth budget).
+func schedulingComponent(node *scheduler.JobExecutionSummary, obs schedulingObservation) scheduler.SchedulerComponent {
+	component := scheduler.SchedulerComponent{
+		ComponentBase: scheduler.ComponentBase{
+			Project:        node.ProjectName.String(),
+			Job:            node.JobName.String(),
+			InducedSeconds: int(obs.Delay.Seconds()),
+			ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
+		},
+	}
+	if node.JobRunSummary.TaskStartTime != nil {
+		component.TaskStart = node.JobRunSummary.TaskStartTime
+	}
+	if obs.Upstream != nil {
+		component.UpstreamJob = obs.Upstream.JobName.String()
+		component.UpstreamEnd = obs.UpstreamEnd
+		component.WaitFrom = scheduler.TimePtr(obs.WaitFrom)
+		component.WaitFromSource = obs.WaitFromSource
+	}
+	return component
 }
 
 // schedulerDelayBudget is the total scheduling wait a measured path of the given depth

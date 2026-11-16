@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	gitlab "github.com/xanzy/go-gitlab"
 
@@ -71,6 +72,31 @@ func (g *GitlabAuditSource) GetChangeOrigin(ctx context.Context) audit.ChangeOri
 	}
 }
 
+// SanitizeHeaderASCII strips all characters outside the printable ASCII range
+// (0x20-0x7E). gRPC rejects outgoing header values containing non-printable
+// ASCII characters, and GitLab user display names may contain arbitrary
+// Unicode (e.g. CJK characters or zero-width spaces), which would otherwise
+// make the client fail with 'header key "x-author" contains value with
+// non-printable ASCII characters'.
+func SanitizeHeaderASCII(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 0x20 && r <= 0x7E {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// FormatPerson renders "<name> <identifier>", falling back to the identifier
+// alone when the sanitized name is empty.
+func FormatPerson(name, identifier string) string {
+	if name == "" {
+		return identifier
+	}
+	return fmt.Sprintf("%s <%s>", name, identifier)
+}
+
 func (g *GitlabAuditSource) getAuditDataFromMR(ctx context.Context, commitSHA string) (string, map[string]string, error) {
 	mrs, _, err := g.Commits.ListMergeRequestsByCommit(g.projectID, commitSHA, gitlab.WithContext(ctx))
 	if err != nil {
@@ -82,11 +108,11 @@ func (g *GitlabAuditSource) getAuditDataFromMR(ctx context.Context, commitSHA st
 
 	// get the first MR associated with the commit
 	mr := mrs[0]
-	author := fmt.Sprintf("%s <%s>", mr.Author.Name, mr.Author.Username)
+	author := FormatPerson(SanitizeHeaderASCII(mr.Author.Name), mr.Author.Username)
 	meta := map[string]string{
 		"merge_request_url": mr.WebURL,
 		"commit_sha":        commitSHA,
-		"approved_by":       fmt.Sprintf("%s <%s>", mr.MergedBy.Name, mr.MergedBy.Username),
+		"approved_by":       FormatPerson(SanitizeHeaderASCII(mr.MergedBy.Name), mr.MergedBy.Username),
 	}
 
 	return author, meta, nil
@@ -98,7 +124,7 @@ func (g *GitlabAuditSource) getAuditDataFromStandaloneCommit(ctx context.Context
 		return "", nil, err
 	}
 
-	author := fmt.Sprintf("%s <%s>", commit.AuthorName, commit.AuthorEmail)
+	author := FormatPerson(SanitizeHeaderASCII(commit.AuthorName), commit.AuthorEmail)
 	meta := map[string]string{
 		"commit_sha": commit.ID,
 		"merged_by":  author,

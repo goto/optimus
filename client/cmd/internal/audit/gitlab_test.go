@@ -113,4 +113,124 @@ func TestGitlabAuditSource_GetChangeOrigin(t *testing.T) {
 
 		assert.Empty(t, origin.Author)
 	})
+
+	t.Run("strips non-ASCII characters from MR author and approver names", func(t *testing.T) {
+		commitSHA := "unicode123"
+		t.Setenv("CI_COMMIT_SHA", commitSHA)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			expected := fmt.Sprintf("/api/v4/projects/project-1/repository/commits/%s/merge_requests", commitSHA)
+			if r.URL.Path == expected {
+				resp := []map[string]interface{}{
+					{
+						"iid":           43,
+						"web_url":       "https://gitlab.example.com/project/mr/43",
+						"source_branch": "feature/unicode-name",
+						// GitLab display names may contain arbitrary Unicode,
+						// which gRPC rejects in header values.
+						"author":    map[string]interface{}{"name": "Test (测试)", "username": "test"},
+						"merged_by": map[string]interface{}{"name": "Zoë\u00a0Reviewer", "username": "zoe"},
+					},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer srv.Close()
+
+		origin := gitlabSource(t, srv.URL).GetChangeOrigin(context.Background())
+
+		assert.Equal(t, "Test () <test>", origin.Author)
+		assert.Equal(t, "gitlab", origin.Source)
+		assert.Equal(t, "ZoReviewer <zoe>", origin.Metadata["approved_by"])
+	})
+
+	t.Run("falls back to identifier only when sanitized name is empty", func(t *testing.T) {
+		commitSHA := "cjkonly1"
+		t.Setenv("CI_COMMIT_SHA", commitSHA)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mrPath := fmt.Sprintf("/api/v4/projects/project-1/repository/commits/%s/merge_requests", commitSHA)
+			commitPath := fmt.Sprintf("/api/v4/projects/project-1/repository/commits/%s", commitSHA)
+
+			switch r.URL.Path {
+			case mrPath:
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode([]interface{}{})
+			case commitPath:
+				commit := map[string]interface{}{
+					"id":           commitSHA,
+					"author_name":  "测试",
+					"author_email": "test@gojek.com",
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(commit)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer srv.Close()
+
+		origin := gitlabSource(t, srv.URL).GetChangeOrigin(context.Background())
+
+		assert.Equal(t, "test@gojek.com", origin.Author)
+		assert.Equal(t, "gitlab", origin.Source)
+	})
+}
+
+func TestSanitizeHeaderASCII(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "keeps printable ASCII intact",
+			input:    "Alice Developer <alice>",
+			expected: "Alice Developer <alice>",
+		},
+		{
+			name:     "strips CJK characters",
+			input:    "Test (测试)",
+			expected: "Test ()",
+		},
+		{
+			name:     "strips non-breaking and zero-width spaces",
+			input:    "John\u00a0Doe\u200bX",
+			expected: "JohnDoeX",
+		},
+		{
+			name:     "strips control characters and DEL",
+			input:    "bad\x01\x7Fname",
+			expected: "badname",
+		},
+		{
+			name:     "keeps tab as-is outside value handling",
+			input:    "tab\tchar",
+			expected: "tabchar",
+		},
+		{
+			name:     "strips accented characters",
+			input:    "Zoë Réviewer",
+			expected: "Zo Rviewer",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, cmdaudit.SanitizeHeaderASCII(tc.input))
+		})
+	}
+}
+
+func TestFormatPerson(t *testing.T) {
+	t.Run("renders name with identifier", func(t *testing.T) {
+		assert.Equal(t, "Alice <alice>", cmdaudit.FormatPerson("Alice", "alice"))
+	})
+
+	t.Run("falls back to identifier when name is empty", func(t *testing.T) {
+		assert.Equal(t, "alice", cmdaudit.FormatPerson("", "alice"))
+	})
 }

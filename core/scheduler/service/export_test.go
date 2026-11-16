@@ -11,3 +11,8 @@ import (
 func (s *JobRootCauseService) SendRootCauseAlertsForTest(ctx context.Context, incidents []*scheduler.SLABreachIncidentWithImpacts, previousByKey map[scheduler.SLABreachIncidentKey]*scheduler.SLABreachIncident) {
 	s.sendRootCauseAlerts(ctx, incidents, previousByKey)
 }
+
+// DelayChangedForTest exposes the change detector of the evidence log to the external test package.
+func DelayChangedForTest(previous *scheduler.SLABreachIncident, fresh scheduler.RootCauseReasonDetail) bool {
+	return delayChanged(previous, fresh)
+}

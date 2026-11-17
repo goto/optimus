@@ -844,6 +844,10 @@ func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenan
 }
 
 func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event) error {
+	// The dag-close measurement only reads stored operator end times, so it is
+	// safe (and cheapest) to do before the state update below.
+	s.recordDagCloseDelay(ctx, event)
+
 	var jobRun *scheduler.JobRun
 	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
 	if err != nil {

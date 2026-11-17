@@ -149,7 +149,16 @@ func (h JobRunHandler) CreateSchedulerRole(ctx context.Context, req *pb.CreateSc
 	return &pb.CreateSchedulerRoleResponse{}, nil
 }
 
-func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (*pb.JobRunInputResponse, error) {
+func (h JobRunHandler) JobRunInput(ctx context.Context, req *pb.JobRunInputRequest) (_ *pb.JobRunInputResponse, err error) {
+	inputStart := time.Now()
+	defer func() {
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		jobRunInputHandlingSeconds.WithLabelValues(status).Observe(time.Since(inputStart).Seconds())
+	}()
+
 	projectName, err := tenant.ProjectNameFrom(req.GetProjectName())
 	if err != nil {
 		h.l.Error("error adapting project name [%s]: %s", req.GetProjectName(), err)
@@ -475,6 +484,15 @@ func (h JobRunHandler) UploadToScheduler(_ context.Context, req *pb.UploadToSche
 
 // RegisterJobEvent TODO: check in jaeger if this api takes time, then we can make this async
 func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJobEventRequest) (*pb.RegisterJobEventResponse, error) {
+	eventTypeName := req.GetEvent().GetType().String()
+	if eventTypeName == "" {
+		eventTypeName = jobEventUnknownType
+	}
+	eventStart := time.Now()
+	defer func() {
+		jobEventHandlingSeconds.WithLabelValues(eventTypeName, jobEventStageTotal).Observe(time.Since(eventStart).Seconds())
+	}()
+
 	tnnt, err := tenant.NewTenant(req.GetProjectName(), req.GetNamespaceName())
 	if err != nil {
 		h.l.Error("invalid tenant information request project [%s] namespace [%s]: %s", req.GetProjectName(), req.GetNamespaceName(), err)
@@ -494,19 +512,27 @@ func (h JobRunHandler) RegisterJobEvent(ctx context.Context, req *pb.RegisterJob
 	}
 	me := errors.NewMultiError("errors in RegisterJobEvent")
 
+	stageStart := time.Now()
 	err = h.service.UpdateJobState(ctx, event)
+	observeJobEventStage(eventTypeName, jobEventStageUpdateJobState, stageStart, err)
 	if err != nil {
 		h.l.Error("error updating job run state for Job: %s, Project: %s, eventType: %s, schedule_at: %s, err: %s", jobName, tnnt.ProjectName(), event.Type, event.JobScheduledAt.String(), err.Error())
 		me.Append(errors.AddErrContext(err, scheduler.EntityJobRun, "scheduler could not update job run state"))
 	}
 
+	stageStart = time.Now()
 	err = h.notifier.Relay(ctx, event)
+	observeJobEventStage(eventTypeName, jobEventStageRelay, stageStart, err)
 	me.Append(err)
 
+	stageStart = time.Now()
 	err = h.notifier.Webhook(ctx, event)
+	observeJobEventStage(eventTypeName, jobEventStageWebhook, stageStart, err)
 	me.Append(err)
 
+	stageStart = time.Now()
 	err = h.notifier.Push(ctx, event)
+	observeJobEventStage(eventTypeName, jobEventStagePush, stageStart, err)
 	me.Append(err)
 
 	if me.ToErr() != nil {

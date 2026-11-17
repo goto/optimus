@@ -147,10 +147,40 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, "job_target", matched[0].ImpactedJobs[0].JobName.String())
 	})
 
+	t.Run("a job without a baseline is skipped instead of counting its whole runtime", func(t *testing.T) {
+		// the upstream ran 45m but has no baseline entry: with nothing to compare
+		// against, its whole runtime must not read as induced delay
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		historical := map[scheduler.JobName]time.Duration{"job_target": targetBaseline}
+
+		detections := eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// a zero baseline is unusable data and skips the job the same way
+		historical["job_upstream"] = 0
+		detections = eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// the same run with a real baseline is measured again
+		historical["job_upstream"] = 10 * time.Minute
+		detections = eval(target, historical, referenceTime)
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.Equal(t, "job_upstream", matched[0].IncidentKey.JobName.String())
+		assert.Equal(t, int(35*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+	})
+
 	t.Run("tier 1 conditions B and C: project flat sum fires for the max-delayed project only", func(t *testing.T) {
 		// chain target <- a1(p_a) <- a2(p_a) <- b1(p_b); no job except b1 crosses 30m alone,
-		// p_a flat-sums to 45m and p_b's b1 fires individually — so p_a is the only
-		// project-level detection, keyed on its max-delay job a2 with the project total
+		// p_a flat-sums past the threshold and p_b's b1 fires individually — so p_a is the
+		// only project-level detection, keyed on its max-delay job a2 with the project total.
+		// Baselines of 1m each: b1 induces 44m, a2 24m, a1 19m (p_a sums to 43m).
 		b1Run := makeRun("job_b1", testBaseTime.Add(-3*time.Hour),
 			ptr(testBaseTime.Add(-3*time.Hour)), ptr(testBaseTime.Add(-2*time.Hour-15*time.Minute)), "success")
 		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
@@ -166,6 +196,9 @@ func TestPublisher_Evaluate(t *testing.T) {
 
 		historical := map[scheduler.JobName]time.Duration{
 			"job_target": targetBaseline,
+			"job_b1":     time.Minute,
+			"job_a2":     time.Minute,
+			"job_a1":     time.Minute,
 		}
 
 		detections := eval(target, historical, referenceTime)
@@ -178,16 +211,16 @@ func TestPublisher_Evaluate(t *testing.T) {
 			byJob[detection.IncidentKey.JobName.String()] = detection
 		}
 		// condition 1: b1 is individually over the threshold
-		assert.Equal(t, 2700, byJob["job_b1"].Reason.InducedDelaySeconds) // 45m
+		assert.Equal(t, int(44*time.Minute/time.Second), byJob["job_b1"].Reason.InducedDelaySeconds)
 		assert.Equal(t, scheduler.DelayScopeJob, byJob["job_b1"].Reason.DelayScope)
-		// condition 2/3: p_a's 45m flat sum, keyed on its max-delay job a2
+		// condition 2/3: p_a's 43m flat sum, keyed on its max-delay job a2
 		projectDetection := byJob["job_a2"]
 		assert.Equal(t, "p_a", projectDetection.IncidentKey.ProjectName.String())
-		assert.Equal(t, 2700, projectDetection.Reason.InducedDelaySeconds) // 45m project total
-		// the alert-facing field carries the representative job's own delay (25m), while
+		assert.Equal(t, int(43*time.Minute/time.Second), projectDetection.Reason.InducedDelaySeconds) // project total
+		// the alert-facing field carries the representative job's own delay (24m), while
 		// thresholds and suppression keep reading the project total
 		assert.Equal(t, scheduler.DelayScopeProject, projectDetection.Reason.DelayScope)
-		assert.Equal(t, int(25*time.Minute/time.Second), projectDetection.Reason.MaxNodeInducedDelaySeconds)
+		assert.Equal(t, int(24*time.Minute/time.Second), projectDetection.Reason.MaxNodeInducedDelaySeconds)
 	})
 
 	t.Run("scheduler delay is the critical path's summed wait against the depth budget", func(t *testing.T) {

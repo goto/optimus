@@ -566,24 +566,50 @@ type jobDelay = struct {
 	induced time.Duration
 }
 
-// inducedRuntimeDelay is one job's induced runtime delay: the observed total runtime
-// (the job's actual end, or the reference time while it is still running) minus its
-// historical task+hook baseline, clamped at zero — the SLA cares about the job's total
-// completion, so a fast phase may offset a slow one.
-func inducedRuntimeDelay(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]time.Duration, referenceTime time.Time) time.Duration {
+// runtimeObservation carries everything one job's runtime measurement used, that will to be evidence.
+type runtimeObservation struct {
+	TaskStart     *time.Time
+	End           time.Time
+	EndSource     string // "actual_end" | "reference_time"
+	Observed      time.Duration
+	Baseline      time.Duration
+	BaselineFound bool
+	Induced       time.Duration
+}
+
+// observeRuntime measures one job's runtime against its historical task+hook baseline.
+//
+// The SLA cares about the job's total completion, so a fast phase may offset a slow one.
+// A job whose baseline is missing (or zero, which is unusable data) is skipped: no induced delay is attributed to it.
+func observeRuntime(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]time.Duration, referenceTime time.Time) runtimeObservation {
 	run := node.JobRunSummary
+	obs := runtimeObservation{EndSource: "reference_time"}
 	if run.TaskStartTime == nil {
-		return 0
+		return obs
 	}
-	end := referenceTime
+	obs.TaskStart = run.TaskStartTime
+	obs.End = referenceTime
 	if actualEnd := run.GetActualEndTime(); actualEnd != nil {
-		end = *actualEnd
+		obs.End = *actualEnd
+		obs.EndSource = "actual_end"
 	}
-	overrun := end.Sub(*run.TaskStartTime) - historicalByJob[node.JobName]
-	if overrun < 0 {
-		return 0
+	obs.Observed = obs.End.Sub(*run.TaskStartTime)
+	baseline, found := historicalByJob[node.JobName]
+	obs.Baseline = baseline
+	obs.BaselineFound = found && baseline > 0
+	if !obs.BaselineFound {
+		return obs
 	}
-	return overrun
+	obs.Induced = obs.Observed - baseline
+	if obs.Induced < 0 {
+		obs.Induced = 0
+	}
+	return obs
+}
+
+// inducedRuntimeDelay is one job's induced runtime delay; see observeRuntime.
+func inducedRuntimeDelay(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]time.Duration, referenceTime time.Time) time.Duration {
+	return observeRuntime(node, historicalByJob, referenceTime).Induced
 }
 
 func inducedByJobOnPath(path []*scheduler.JobExecutionSummary, ev TargetEvaluation, projectName tenant.ProjectName) []jobDelay {

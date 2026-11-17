@@ -20,6 +20,21 @@ const (
 	// same run finished. A large value points at DAG-processor or callback
 	// queueing, not at Optimus scheduling.
 	SchedulerDelayPhaseDagClose = "dag_close"
+	// SchedulerDelayPhaseDetection measures gate -> sensor success: how long
+	// after the run was free to start its sensor noticed the upstream.
+	SchedulerDelayPhaseDetection = "detection"
+	// SchedulerDelayPhaseScheduling measures sensor success -> queued_dttm:
+	// the scheduler loop and pool-slot wait before the task enters the queue.
+	SchedulerDelayPhaseScheduling = "scheduling"
+	// SchedulerDelayPhasePickup measures queued_dttm -> task start: the
+	// executor and worker pickup.
+	SchedulerDelayPhasePickup = "pickup"
+	// SchedulerDelayPhaseHandoff is the sensor success -> task start wait used
+	// when queued_dttm is unknown, or the whole gate -> task start wait when
+	// the run has no sensor at all.
+	SchedulerDelayPhaseHandoff = "handoff"
+	// SchedulerDelayPhaseTotal measures gate -> task start.
+	SchedulerDelayPhaseTotal = "total"
 )
 
 // Gates describe what the job was waiting on; not every phase has one.

@@ -2784,6 +2784,14 @@ func (j *JobRepository) GetJobs(ctx context.Context, projectName tenant.ProjectN
 	return args.Get(0).([]*scheduler.JobWithDetails), args.Error(1)
 }
 
+func (j *JobRepository) GetUpstreamsOfJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Upstreams, error) {
+	args := j.Called(ctx, projectName, jobName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*scheduler.Upstreams), args.Error(1)
+}
+
 func (j *JobRepository) GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error) {
 	args := j.Called(ctx, filter)
 	if args.Get(0) == nil {

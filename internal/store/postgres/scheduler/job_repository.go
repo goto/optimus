@@ -512,6 +512,30 @@ func (j *JobRepository) GetJobDetails(ctx context.Context, projectName tenant.Pr
 	return spec.toJobWithDetails()
 }
 
+// GetUpstreamsOfJob returns the resolved upstream gates of a single job: the
+// Optimus upstream edges (same-host or cross-host) and the third-party gates.
+// It reuses the same queries the bulk loaders use, narrowed to one job, so a
+// caller that only needs one job's gates does not pay for a project scan.
+func (j *JobRepository) GetUpstreamsOfJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Upstreams, error) {
+	upstreamGrouped, err := j.getJobsUpstreams(ctx, projectName, []string{jobName.String()})
+	if err != nil {
+		return nil, err
+	}
+	thirdPartyGrouped, err := j.getThirdPartyUpstreams(ctx, projectName, []string{jobName.String()})
+	if err != nil {
+		return nil, err
+	}
+
+	upstreams := &scheduler.Upstreams{}
+	if list, ok := upstreamGrouped[jobName.String()]; ok {
+		upstreams.UpstreamJobs = list
+	}
+	if list, ok := thirdPartyGrouped[jobName.String()]; ok {
+		upstreams.ThirdParty = list
+	}
+	return upstreams, nil
+}
+
 func groupUpstreamsByJobName(jobUpstreams []*JobUpstreams) (map[string][]*scheduler.JobUpstream, error) {
 	multiError := errors.NewMultiError("errorsInGroupUpstreamsByJobName")
 	jobUpstreamGroup := map[string][]*scheduler.JobUpstream{}

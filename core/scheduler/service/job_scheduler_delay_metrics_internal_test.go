@@ -23,11 +23,22 @@ type stubJobRunRepository struct {
 	summaries       []*scheduler.JobRunSummary
 	err             error
 	callIdentifiers []scheduler.JobRunIdentifier
+	upstreamRuns    []*scheduler.JobRun
 }
 
 func (s *stubJobRunRepository) GetRunSummaryByIdentifiers(_ context.Context, identifiers []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
 	s.callIdentifiers = identifiers
 	return s.summaries, s.err
+}
+
+// withUpstreamRuns teaches the stub what GetByScheduledTimes returns for the
+// upstream run lookups of the scheduler delay wiring.
+func (s *stubJobRunRepository) withUpstreamRuns(runs []*scheduler.JobRun) {
+	s.upstreamRuns = runs
+}
+
+func (s *stubJobRunRepository) GetByScheduledTimes(_ context.Context, _ tenant.Tenant, _ scheduler.JobName, _ []time.Time) ([]*scheduler.JobRun, error) {
+	return s.upstreamRuns, nil
 }
 
 func skippedDelayCount(t *testing.T, reason string) float64 {
@@ -39,7 +50,7 @@ func skippedDelayCount(t *testing.T, reason string) float64 {
 	return metric.Counter.GetValue()
 }
 
-func observedDelayCount(t *testing.T, project, namespace, phase, gate string) uint64 {
+func observedDelayCount(t *testing.T, phase, gate string) uint64 {
 	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -54,7 +65,8 @@ func observedDelayCount(t *testing.T, project, namespace, phase, gate string) ui
 			for _, lp := range metric.GetLabel() {
 				labels[lp.GetName()] = lp.GetValue()
 			}
-			if labels["project"] == project && labels["namespace"] == namespace &&
+			// all tests in this package sample the same proj/ns1 tenant
+			if labels["project"] == "proj" && labels["namespace"] == "ns1" &&
 				labels["phase"] == phase && labels["gate"] == gate {
 				return metric.GetHistogram().GetSampleCount()
 			}
@@ -101,10 +113,10 @@ func TestRecordDagCloseDelay(t *testing.T) {
 	t.Run("ignores non job_success events", func(t *testing.T) {
 		service := newService(&stubJobRunRepository{})
 
-		observed := observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
+		observed := observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
 		service.recordDagCloseDelay(ctx, newEvent(scheduler.TaskStartEvent, runIDScheduled))
 
-		assert.Equal(t, observed, observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
+		assert.Equal(t, observed, observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
 	})
 
 	t.Run("skips when run id is missing", func(t *testing.T) {
@@ -185,10 +197,10 @@ func TestRecordDagCloseDelay(t *testing.T) {
 		}
 		service := newService(repo)
 
-		before := observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
+		before := observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
 		service.recordDagCloseDelay(ctx, newEvent(scheduler.JobSuccessEvent, runIDScheduled))
 
-		assert.Equal(t, before+1, observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
+		assert.Equal(t, before+1, observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
 		assert.Equal(t, []scheduler.JobRunIdentifier{{JobName: jobName, ScheduledAt: scheduledAt}}, repo.callIdentifiers)
 	})
 
@@ -205,11 +217,11 @@ func TestRecordDagCloseDelay(t *testing.T) {
 
 		// hook end is 80s before the callback, so a sample must be recorded,
 		// not skipped as negative
-		delayObservedBefore := observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
+		delayObservedBefore := observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone)
 		skipBefore := skippedDelayCount(t, "negative_delay")
 		service.recordDagCloseDelay(ctx, newEvent(scheduler.JobSuccessEvent, runIDScheduled))
 
-		assert.Equal(t, delayObservedBefore+1, observedDelayCount(t, "proj", "ns1", SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
+		assert.Equal(t, delayObservedBefore+1, observedDelayCount(t, SchedulerDelayPhaseDagClose, SchedulerDelayGateNone))
 		assert.Equal(t, skipBefore, skippedDelayCount(t, "negative_delay"))
 	})
 }

@@ -62,6 +62,10 @@ type JobRepository interface {
 	GetJobDetails(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.JobWithDetails, error)
 	GetAll(ctx context.Context, projectName tenant.ProjectName) ([]*scheduler.JobWithDetails, error)
 	GetJobs(ctx context.Context, projectName tenant.ProjectName, jobs []string) ([]*scheduler.JobWithDetails, error)
+	// GetUpstreamsOfJob returns the resolved upstream gates of one job:
+	// Optimus upstream edges plus third-party gates. Used by the scheduler
+	// delay wiring to classify what a run was waiting on.
+	GetUpstreamsOfJob(ctx context.Context, projectName tenant.ProjectName, jobName scheduler.JobName) (*scheduler.Upstreams, error)
 	GetChangelogs(ctx context.Context, filter scheduler.ChangelogFilter) ([]*scheduler.Changelog, error)
 }
 
@@ -1234,6 +1238,10 @@ func (s *JobRunService) UpdateJobState(ctx context.Context, event *scheduler.Eve
 	case scheduler.SensorSuccessEvent, scheduler.SensorRetryEvent, scheduler.SensorFailEvent:
 		return s.updateOperatorRun(ctx, event, scheduler.OperatorSensor)
 	case scheduler.TaskStartEvent, scheduler.HookStartEvent:
+		// measures the task-start phases in the background; never blocks or
+		// fails the event handling. The background goroutine deliberately uses
+		// a fresh context: the request context dies with the handler.
+		s.recordTaskStartDelay(event) //nolint:contextcheck
 
 		isRetry, err := s.createOperatorRunForStartEvent(ctx, event, event.EventContext.OperatorType)
 		if err != nil {

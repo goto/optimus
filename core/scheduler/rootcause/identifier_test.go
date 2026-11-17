@@ -495,3 +495,81 @@ func TestIdentifier_EscalatesNotStarted(t *testing.T) {
 		assert.Equal(t, referenceTime.Sub(wantSafeStart), cause.Evidence.InducedDelay)
 	})
 }
+
+func TestIdentifier_SameJobReachedAtTwoRuns(t *testing.T) {
+	// topology: T -> {B, M}, M -> B, B -> A. B runs at (16, 21) and A at (15, 20), so A is
+	// reached at two runs: B@21 implies A@20 (healthy), B@16 implies A@15 (never started).
+	// Only A@15 breaches its inferred SLA; a lineage that collapses A to a single run -
+	// the legacy job-name-keyed view - can miss the breach entirely.
+	tnnt, err := tenant.NewTenant("project-a", "team-a")
+	assert.NoError(t, err)
+
+	targetSLA := time.Date(2026, 9, 10, 22, 30, 0, 0, time.UTC)
+	day := func(hour int) time.Time { return time.Date(2026, 9, 10, hour, 0, 0, 0, time.UTC) }
+	dur := func(d time.Duration) *time.Duration { return &d }
+	at := func(t time.Time, m int) *time.Time {
+		v := t.Add(time.Duration(m) * time.Minute)
+		return &v
+	}
+	damper := scheduler.DamperFactor{Method: scheduler.DamperFactorMethodConstant, BaseValue: 1.0}
+	referenceTime := day(22).Add(32 * time.Minute)
+
+	runA15 := &scheduler.JobRunSummary{JobName: "job-a", ScheduledAt: day(15)} // never started
+	runA20 := &scheduler.JobRunSummary{
+		JobName: "job-a", ScheduledAt: day(20),
+		TaskStartTime: at(day(20), 2), TaskEndTime: at(day(20), 5), JobEndTime: at(day(20), 5),
+	}
+	runB21 := &scheduler.JobRunSummary{JobName: "job-b", ScheduledAt: day(21)} // never started
+	runB16 := &scheduler.JobRunSummary{
+		JobName: "job-b", ScheduledAt: day(16),
+		TaskStartTime: at(day(16), 2), TaskEndTime: at(day(16), 5), JobEndTime: at(day(16), 5),
+	}
+	runM := &scheduler.JobRunSummary{
+		JobName: "job-m", ScheduledAt: day(17),
+		TaskStartTime: at(day(17), 2), TaskEndTime: at(day(17), 5), JobEndTime: at(day(17), 5),
+	}
+	runT := &scheduler.JobRunSummary{JobName: "job-t", ScheduledAt: day(22)} // never started
+
+	nodeA := &scheduler.JobLineageSummary{
+		JobName: "job-a", IsEnabled: true, Tenant: tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-b", day(21)): runA20,
+			scheduler.NewJobRunKey("job-b", day(16)): runA15,
+		},
+		// the legacy job-level view collapsed to the latest downstream run's A@20: with only
+		// this view, the A@15 breach is invisible
+		JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-b": runA20},
+	}
+	nodeB := &scheduler.JobLineageSummary{
+		JobName: "job-b", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeA},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", day(22)): runB21,
+			scheduler.NewJobRunKey("job-m", day(17)): runB16,
+		},
+	}
+	nodeM := &scheduler.JobLineageSummary{
+		JobName: "job-m", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeB},
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runM},
+	}
+	nodeT := &scheduler.JobLineageSummary{
+		JobName: "job-t", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeB, nodeM},
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+	}
+
+	jobDurations := map[scheduler.JobName]*time.Duration{
+		"job-t": dur(5 * time.Minute), "job-m": dur(5 * time.Minute),
+		"job-b": dur(5 * time.Minute), "job-a": dur(5 * time.Minute),
+	}
+	identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+	finding := identifier.FindInferredBreaches(context.Background(), nodeT, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
+
+	state, ok := finding.BreachStates["job-a"]
+	assert.True(t, ok, "job-A must be flagged breaching via its A@15 run, got: %+v", finding.BreachStates)
+	assert.Equal(t, day(15), state.JobRun.ScheduledAt,
+		"the flagged run must be the A@15 run, not the collapsed job-level A@20 entry")
+	assert.Equal(t, scheduler.SLABreachCauseNotStarted, state.Status)
+}

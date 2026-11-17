@@ -60,7 +60,7 @@ func (i *Identifier) FindInferredBreaches(
 	}
 
 	// the target finished before its SLA: there is no breach to find
-	if targetRun, ok := jobTarget.JobRuns[jobTarget.JobName]; ok && targetRun != nil {
+	if targetRun := jobTarget.TargetRun(); targetRun != nil {
 		if endTime := targetRun.GetActualEndTime(); endTime != nil && !endTime.After(*targetedSLA) {
 			i.l.Info("target job finished before SLA, skipping breach detection",
 				"job", jobTarget.JobName, "end_time", endTime, "sla", targetedSLA)

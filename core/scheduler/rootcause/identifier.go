@@ -3,7 +3,6 @@ package rootcause
 import (
 	"context"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -486,7 +485,7 @@ func (i *Identifier) CalculateInferredSLAs(jobTarget *scheduler.JobLineageSummar
 
 		for _, upstreamJob := range current.job.Upstreams {
 			// do not set inferred sla from a job which has no valid job runs
-			if len(upstreamJob.JobRuns) == 0 {
+			if !upstreamJob.HasRuns() {
 				i.l.Debug("upstream job does not have associated runs to attach SLA. skipping remaining upstreams for this table", "upstream", upstreamJob.JobName, "targetJob", jobTarget.JobName)
 				continue
 			}
@@ -565,7 +564,7 @@ func (i *Identifier) findBreachStates(
 		if jobSLAStates[job.JobName] == nil || jobSLAStates[job.JobName].InferredSLA == nil || jobSLAStates[job.JobName].EstimatedDuration == nil { // less likely occur, but just in case
 			continue
 		}
-		if len(job.JobRuns) == 0 {
+		if !job.HasRuns() {
 			i.l.Info("skipping job for SLA breach check as it has no job run associated", "job", job.JobName)
 			continue
 		}
@@ -580,12 +579,16 @@ func (i *Identifier) findBreachStates(
 			estimatedDuration := *jobSLAStates[job.JobName].EstimatedDuration
 
 			// A job reached via multiple downstream paths (a diamond) can carry more than one
-			// distinct run in JobRuns - one per path, since different downstream jobs can imply
+			// distinct run - one per path, since different downstream runs can imply
 			// different actual schedules for the same shared upstream. Check every run so a
 			// breach on any converging branch isn't silently dropped just because another
 			// branch's run happens to look fine.
+			runs := job.DistinctRuns()
+			if len(runs) > 1 {
+				i.l.Info("job reached at multiple runs in one lineage, checking each for breach", "job", job.JobName, "runs", len(runs))
+			}
 			var state *scheduler.JobState
-			for _, jobRun := range sortedJobRuns(job.JobRuns) {
+			for _, jobRun := range runs {
 				if oldScheduled, err := i.scheduledChangeGetter.GetRecentScheduleChange(ctx, job.JobName, job.Tenant, jobRun.ScheduledAt); err != nil {
 					i.l.Error("failed to get recent schedule change for job, check the breach anyway", "job", job.JobName, "error", err)
 				} else if oldScheduled != "" {
@@ -681,26 +684,6 @@ func reconstructStatePath(targetName, breachName scheduler.JobName, bottleneck B
 		path = append(path, plain)
 	}
 	return path
-}
-
-// sortedJobRuns returns a job's runs ordered by ScheduledAt ascending, so a diamond-shared job
-// with multiple candidate runs (one per downstream path) is checked deterministically, earliest
-// (most likely overdue) first.
-func sortedJobRuns(jobRuns map[scheduler.JobName]*scheduler.JobRunSummary) []*scheduler.JobRunSummary {
-	runs := make([]*scheduler.JobRunSummary, 0, len(jobRuns))
-	for _, run := range jobRuns {
-		runs = append(runs, run)
-	}
-	sort.Slice(runs, func(i, j int) bool {
-		return runs[i].ScheduledAt.Before(runs[j].ScheduledAt)
-	})
-	unique := runs[:0]
-	for i, run := range runs {
-		if i == 0 || !run.ScheduledAt.Equal(runs[i-1].ScheduledAt) {
-			unique = append(unique, run)
-		}
-	}
-	return unique
 }
 
 func populateJobSLAStates(jobDurations, startOffsets map[scheduler.JobName]*time.Duration, jobSLAsByJobName map[scheduler.JobName]*time.Time) map[scheduler.JobName]*scheduler.JobSLAState {

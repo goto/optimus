@@ -19,7 +19,7 @@ func NewScheduler(l log.Logger, conf *config.ServerConfig, pluginRepo dag.Plugin
 		return nil, err
 	}
 
-	client := airflow.NewAirflowClient()
+	client := airflow.NewAirflowClient(conf.AirflowClient)
 	scheduler := airflow.NewScheduler(l, bucketFactory, client, dagCompiler, projecGetter, secretGetter)
 	return scheduler, nil
 }

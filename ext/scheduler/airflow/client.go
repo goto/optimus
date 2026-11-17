@@ -16,9 +16,11 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/goto/optimus/config"
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/internal/errors"
 	"github.com/goto/optimus/internal/lib/cron"
+	"github.com/goto/optimus/internal/utils"
 )
 
 const (
@@ -67,24 +69,73 @@ type SchedulerAuth struct {
 }
 
 type ClientAirflow struct {
-	client *http.Client
+	client         *http.Client
+	retryMax       int
+	retryBackoffMs int64
 }
 
 var airflowAPIMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "airflow_api",
 }, []string{"api_name", "status", "error"})
 
-func NewAirflowClient() *ClientAirflow {
-	return &ClientAirflow{client: &http.Client{}}
+func NewAirflowClient(cfg config.AirflowClientConfig) *ClientAirflow {
+	retryMax := cfg.RetryMax
+	if retryMax < 1 {
+		retryMax = 3
+	}
+	retryBackoffMs := cfg.RetryBackoffMs
+	if retryBackoffMs < 1 {
+		retryBackoffMs = 500
+	}
+	return &ClientAirflow{
+		client:         &http.Client{},
+		retryMax:       retryMax,
+		retryBackoffMs: retryBackoffMs,
+	}
 }
 
 func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth SchedulerAuth) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < ac.retryMax; attempt++ {
+		if attempt > 0 {
+			if err := ac.waitForRetry(ctx, attempt); err != nil {
+				return nil, err
+			}
+		}
+
+		body, retryable, err := ac.invokeOnce(ctx, r, auth)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if !retryable || attempt == ac.retryMax-1 {
+			return nil, lastErr
+		}
+	}
+	return nil, lastErr
+}
+
+func (ac ClientAirflow) waitForRetry(ctx context.Context, attempt int) error {
+	sleepTime := int64(1 << (attempt - 1))
+	backoff := time.Duration(sleepTime*ac.retryBackoffMs) * time.Millisecond
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (ac ClientAirflow) invokeOnce(ctx context.Context, r airflowRequest, auth SchedulerAuth) ([]byte, bool, error) {
 	var resp []byte
 
 	endpoint := buildEndPoint(auth.host, r.path, r.query)
 	request, err := http.NewRequestWithContext(ctx, r.method, endpoint, bytes.NewBuffer(r.body))
 	if err != nil {
-		return resp, fmt.Errorf("failed to build http request for %s due to %w", endpoint, err)
+		return resp, false, fmt.Errorf("failed to build http request for %s due to %w", endpoint, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(auth.token))))
@@ -92,14 +143,19 @@ func (ac ClientAirflow) Invoke(ctx context.Context, r airflowRequest, auth Sched
 	httpResp, respErr := ac.client.Do(request)
 	if respErr != nil {
 		airflowAPIMetrics.WithLabelValues(r.path, "error", respErr.Error()).Inc()
-		return resp, fmt.Errorf("failed to call airflow %s due to %w", endpoint, respErr)
+		return resp, utils.IsRetryableTransportError(respErr), fmt.Errorf("failed to call airflow %s due to %w", endpoint, respErr)
 	}
 	airflowAPIMetrics.WithLabelValues(r.path, httpResp.Status, "").Inc()
 	if httpResp.StatusCode != http.StatusOK {
+		retryable := utils.IsRetryableHTTPStatus(httpResp.StatusCode)
 		httpResp.Body.Close()
-		return resp, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, endpoint)
+		return resp, retryable, fmt.Errorf("status code received %d on calling %s", httpResp.StatusCode, endpoint)
 	}
-	return parseResponse(httpResp)
+	body, err := parseResponse(httpResp)
+	if err != nil {
+		return body, utils.IsRetryableTransportError(err), err
+	}
+	return body, false, nil
 }
 
 func parseResponse(resp *http.Response) ([]byte, error) {

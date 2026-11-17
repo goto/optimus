@@ -146,16 +146,31 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 	return nil
 }
 
-// GetRunForDownstream returns the run of this job implied by the given downstream run. When
-// the lineage carries no per-downstream-run keys (RunsByDownstream is nil, as in hand-built
-// fixtures), it falls back to the job-level view; when it does, the lookup is strict and a
-// missing key yields nil rather than an arbitrary run of the same job.
+// GetRunForDownstream returns the run of this job implied by the given downstream run.
+// The exact (downstream job, scheduledAt) key wins. When no entry carries that exact key
+// but exactly one entry exists for the downstream job name, that entry is returned: the
+// single-run case is unambiguous regardless of which schedule the caller keyed it with.
+// When several runs share the downstream job name the lookup is ambiguous and returns nil.
 func (j *JobLineageSummary) GetRunForDownstream(key JobRunKey) *JobRunSummary {
-	if j.RunsByDownstream != nil {
-		return j.RunsByDownstream[key]
+	if j.RunsByDownstream == nil {
+		// interim: fixtures that still use the deprecated job-level view
+		return j.GetRunForJob(key.JobName)
+	}
+	if run, exists := j.RunsByDownstream[key]; exists {
+		return run
 	}
 
-	return j.GetRunForJob(key.JobName)
+	var match *JobRunSummary
+	for downstreamKey, run := range j.RunsByDownstream {
+		if downstreamKey.JobName != key.JobName {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = run
+	}
+	return match
 }
 
 // RefreshJobRuns rebuilds the legacy JobRuns view from RunsByDownstream. JobRuns is keyed by

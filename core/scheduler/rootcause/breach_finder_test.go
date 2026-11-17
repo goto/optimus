@@ -28,13 +28,13 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	damper := scheduler.DamperFactor{Method: scheduler.DamperFactorMethodConstant, BaseValue: 1.0}
 	identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
 
-	node := func(jobName string, enabled bool, runs map[scheduler.JobName]*scheduler.JobRunSummary, upstreams ...*scheduler.JobLineageSummary) *scheduler.JobLineageSummary {
+	node := func(jobName string, enabled bool, runs map[scheduler.JobRunKey]*scheduler.JobRunSummary, upstreams ...*scheduler.JobLineageSummary) *scheduler.JobLineageSummary {
 		return &scheduler.JobLineageSummary{
-			JobName:   scheduler.JobName(jobName),
-			IsEnabled: enabled,
-			Tenant:    tnnt,
-			Upstreams: upstreams,
-			JobRuns:   runs,
+			JobName:          scheduler.JobName(jobName),
+			IsEnabled:        enabled,
+			Tenant:           tnnt,
+			Upstreams:        upstreams,
+			RunsByDownstream: runs,
 		}
 	}
 	run := func(jobName string) *scheduler.JobRunSummary {
@@ -55,9 +55,9 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	t.Run("returns the single breach origin of a linear chain", func(t *testing.T) {
 		// A -> B -> C; reference 25m after schedule breaches C's inferred SLA (+10m) and
 		// B's (+20m); A's own SLA (+30m) is not yet breached, so C is the only breach origin.
-		nodeC := node("job-C", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")})
-		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")}, nodeC)
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB)
+		nodeC := node("job-C", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-C", scheduledAt): run("job-C")})
+		nodeB := node("job-B", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-B", scheduledAt): run("job-B")}, nodeC)
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): run("job-A")}, nodeB)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
@@ -77,10 +77,10 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 
 	t.Run("collapses a diamond to the shared breach origin", func(t *testing.T) {
 		// A <- {B, C} <- D; only D breaches its inferred SLA.
-		shared := node("job-D", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-D": run("job-D")})
-		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")}, shared)
-		nodeC := node("job-C", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")}, shared)
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB, nodeC)
+		shared := node("job-D", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-D", scheduledAt): run("job-D")})
+		nodeB := node("job-B", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-B", scheduledAt): run("job-B")}, shared)
+		nodeC := node("job-C", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-C", scheduledAt): run("job-C")}, shared)
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): run("job-A")}, nodeB, nodeC)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
@@ -90,9 +90,9 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 
 	t.Run("returns every independent breach origin in sorted order across repeated runs", func(t *testing.T) {
 		// A <- {B, C}; both breach their inferred SLA (+20m) at reference +25m.
-		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")})
-		nodeC := node("job-C", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")})
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeC, nodeB)
+		nodeB := node("job-B", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-B", scheduledAt): run("job-B")})
+		nodeC := node("job-C", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-C", scheduledAt): run("job-C")})
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): run("job-A")}, nodeC, nodeB)
 
 		var firstOrder []scheduler.JobName
 		for range 20 {
@@ -115,7 +115,7 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 		// GetActualEndTime reads HookEndTime then TaskEndTime (JobEndTime alone is not enough)
 		finished.TaskEndTime = &end
 		finished.JobEndTime = &end
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": finished})
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): finished})
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 
@@ -124,9 +124,9 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	})
 
 	t.Run("skips disabled and skipped jobs", func(t *testing.T) {
-		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")})
-		disabled := node("job-C", false, map[scheduler.JobName]*scheduler.JobRunSummary{"job-C": run("job-C")})
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB, disabled)
+		nodeB := node("job-B", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-B", scheduledAt): run("job-B")})
+		disabled := node("job-C", false, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-C", scheduledAt): run("job-C")})
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): run("job-A")}, nodeB, disabled)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, &sla, skipNone, damper, scheduledAt.Add(25*time.Minute))
 		assert.Len(t, finding.Origins, 1)
@@ -143,8 +143,8 @@ func TestIdentifier_FindInferredBreaches(t *testing.T) {
 	})
 
 	t.Run("returns an empty finding without a targeted SLA", func(t *testing.T) {
-		nodeB := node("job-B", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": run("job-B")})
-		target := node("job-A", true, map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run("job-A")}, nodeB)
+		nodeB := node("job-B", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-B", scheduledAt): run("job-B")})
+		target := node("job-A", true, map[scheduler.JobRunKey]*scheduler.JobRunSummary{scheduler.NewJobRunKey("job-A", scheduledAt): run("job-A")}, nodeB)
 
 		finding := identifier.FindInferredBreaches(context.Background(), target, durations, nil, nil, skipNone, damper, scheduledAt.Add(25*time.Minute))
 		assert.Empty(t, finding.Origins)

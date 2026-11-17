@@ -304,8 +304,8 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 		jobLineageSummary := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
 					JobName:     jobAName,
 					ScheduledAt: scheduledAt,
 				},
@@ -364,8 +364,8 @@ func TestGenerateExpectedFinishTimes(t *testing.T) {
 		jobLineageSummary := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
 					JobName:     jobAName,
 					ScheduledAt: scheduledAt,
 				},
@@ -420,10 +420,10 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 			ScheduledAt: scheduledAt,
 		}
 		currentJobWithLineage := &scheduler.JobLineageSummary{
-			JobName:   jobTarget.JobName,
-			IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{}, // no current job run
-			Upstreams: []*scheduler.JobLineageSummary{},
+			JobName:          jobTarget.JobName,
+			IsEnabled:        true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{}, // no current job run
+			Upstreams:        []*scheduler.JobLineageSummary{},
 		}
 		jobWithLineageMap[jobTarget.JobName] = currentJobWithLineage
 		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
@@ -464,8 +464,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 					JobEndTime:  &jobEndTime,
@@ -511,8 +511,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 				},
@@ -558,8 +558,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 				},
@@ -609,8 +609,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:       jobTarget.JobName,
 					ScheduledAt:   scheduledAt,
 					TaskStartTime: &scheduledAt, // started on time
@@ -658,8 +658,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:       jobTarget.JobName,
 					ScheduledAt:   scheduledAt,
 					TaskStartTime: &scheduledAt, // started on time
@@ -707,8 +707,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 				},
@@ -755,8 +755,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 				},
@@ -766,8 +766,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobUpstreamWithLineage := &scheduler.JobLineageSummary{
 			JobName:   scheduler.JobName("job-B"),
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, upstreamScheduledAt): {
 					JobName:     scheduler.JobName("job-B"),
 					ScheduledAt: upstreamScheduledAt,
 				},
@@ -817,8 +817,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAt,
 				},
@@ -828,8 +828,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobUpstreamWithLineage := &scheduler.JobLineageSummary{
 			JobName:   scheduler.JobName("job-B"),
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, upstreamScheduledAt): {
 					JobName:     scheduler.JobName("job-B"),
 					ScheduledAt: upstreamScheduledAt,
 					TaskStartTime: func() *time.Time {
@@ -891,8 +891,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobCWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobCName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobBName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobBName, scheduledAtC): {
 					JobName:     jobCName,
 					ScheduledAt: scheduledAtC,
 					JobEndTime:  &jobCEndTime,
@@ -903,8 +903,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobBWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobBName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAtB): {
 					JobName:     jobBName,
 					ScheduledAt: scheduledAtB,
 				},
@@ -914,8 +914,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAtA): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAtA,
 				},
@@ -985,17 +985,19 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		jobXWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobXName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: jobXRun, // shallow path: job-A -> job-X
-				jobBName:          jobXRun, // deep path: job-A -> job-B -> job-X (same run)
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, jobXRun.ScheduledAt): jobXRun,
+				scheduler.NewJobRunKey( // shallow path: job-A -> job-X
+					jobBName, jobXRun.ScheduledAt): jobXRun,
+				// deep path: job-A -> job-B -> job-X (same run)
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		jobBWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobBName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAtB): {
 					JobName:     jobBName,
 					ScheduledAt: scheduledAtB,
 				},
@@ -1005,8 +1007,8 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		currentJobWithLineage := &scheduler.JobLineageSummary{
 			JobName:   jobTarget.JobName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobTarget.JobName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAtA): {
 					JobName:     jobTarget.JobName,
 					ScheduledAt: scheduledAtA,
 				},
@@ -1091,16 +1093,16 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		lineageA := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {JobName: jobAName, ScheduledAt: scheduledAt},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {JobName: jobAName, ScheduledAt: scheduledAt},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		lineageB := &scheduler.JobLineageSummary{
 			JobName:   jobBName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobBName: {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobBName, scheduledAt): {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -1148,12 +1150,16 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		jobB := makeJobWithDetails(projectB, jobBName, scheduledAt)
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: jobAName, IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {JobName: jobAName, ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		lineageB := &scheduler.JobLineageSummary{
 			JobName: jobBName, IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobBName: {JobName: jobBName, ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobBName, scheduledAt): {JobName: jobBName, ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
@@ -1207,8 +1213,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		lineageA := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
 					JobName:       jobAName,
 					ScheduledAt:   scheduledAt,
 					TaskStartTime: &scheduledAt,
@@ -1264,8 +1270,8 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		lineageA := &scheduler.JobLineageSummary{
 			JobName:   jobAName,
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
 					JobName:       jobAName,
 					ScheduledAt:   scheduledAt,
 					TaskStartTime: &scheduledAt,
@@ -1320,15 +1326,15 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		hookEndB := referenceTime.Add(2 * time.Minute)  // expected = referenceTime+10m -> delay -8m
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: jobAName, IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobAName: {JobName: jobAName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndA, JobStatus: "success"},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {JobName: jobAName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndA, JobStatus: "success"},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 		lineageB := &scheduler.JobLineageSummary{
 			JobName: jobBName, IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				jobBName: {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndB, JobStatus: "success"},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobBName, scheduledAt): {JobName: jobBName, ScheduledAt: scheduledAt, TaskStartTime: &scheduledAt, HookEndTime: &hookEndB, JobStatus: "success"},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -1366,7 +1372,9 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		jobA := makeJobWithDetails(projectName, jobAName, scheduledAt)
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: jobAName, IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {JobName: jobAName, ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
@@ -1398,7 +1406,9 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		jobB := makeJobWithDetails(projectB, jobBName, scheduledAt)
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: jobAName, IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {JobName: jobAName, ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
 
@@ -1523,13 +1533,17 @@ func TestPopulateExpectedFinishTime_SameJobAtTwoRuns(t *testing.T) {
 	nodeM := &scheduler.JobLineageSummary{
 		JobName:   "job-m",
 		IsEnabled: true,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runM},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", runM.ScheduledAt): runM,
+		},
 		Upstreams: []*scheduler.JobLineageSummary{nodeB},
 	}
 	nodeT := &scheduler.JobLineageSummary{
 		JobName:   "job-t",
 		IsEnabled: true,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", runT.ScheduledAt): runT,
+		},
 		Upstreams: []*scheduler.JobLineageSummary{nodeB, nodeM},
 	}
 

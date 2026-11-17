@@ -105,6 +105,9 @@ func (s *JobRunService) observeTaskStartDelay(ctx context.Context, event *schedu
 		TaskStart:     event.EventTime,
 		LastSensorEnd: summaries[0].WaitEndTime, // nil when the run has no sensor rows
 	}
+	if event.EventContext != nil {
+		input.Queued = event.EventContext.OperatorRunInstance.QueuedDttm
+	}
 
 	gate, gateEnd, skipReason := s.classifyGate(ctx, event)
 	if skipReason != "" {

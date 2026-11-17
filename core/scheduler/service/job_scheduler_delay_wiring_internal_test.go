@@ -317,6 +317,32 @@ func TestObserveTaskStartDelay(t *testing.T) {
 		assert.Equal(t, before+1, skippedDelayCount(t, "summary_lookup_failed"))
 	})
 
+	t.Run("queued_dttm splits handoff into scheduling and pickup", func(t *testing.T) {
+		queued := scheduledAt.Add(17 * time.Minute) // sensor 5:15 -> queued 5:17 -> start 5:20
+		event := newEvent()
+		event.EventContext.OperatorRunInstance.QueuedDttm = &queued
+
+		repo := &stubJobRunRepository{
+			summaries: []*scheduler.JobRunSummary{{
+				JobName:     jobName,
+				ScheduledAt: scheduledAt,
+				WaitEndTime: &sensorEnd,
+			}},
+		}
+		jobRepo := &stubJobRepository{upstreams: &scheduler.Upstreams{}}
+		service := newService(repo, jobRepo)
+
+		beforeS := observeDelta(t, SchedulerDelayPhaseScheduling, string(scheduler.DelayGateNone))
+		beforeP := observeDelta(t, SchedulerDelayPhasePickup, string(scheduler.DelayGateNone))
+		beforeH := observeDelta(t, SchedulerDelayPhaseHandoff, string(scheduler.DelayGateNone))
+
+		service.observeTaskStartDelay(ctx, event)
+
+		assert.Equal(t, beforeS+1, observeDelta(t, SchedulerDelayPhaseScheduling, string(scheduler.DelayGateNone)))
+		assert.Equal(t, beforeP+1, observeDelta(t, SchedulerDelayPhasePickup, string(scheduler.DelayGateNone)))
+		assert.Equal(t, beforeH, observeDelta(t, SchedulerDelayPhaseHandoff, string(scheduler.DelayGateNone)))
+	})
+
 	t.Run("run without sensor measures one handoff", func(t *testing.T) {
 		repo := &stubJobRunRepository{
 			summaries: []*scheduler.JobRunSummary{{

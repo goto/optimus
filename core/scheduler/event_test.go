@@ -50,6 +50,47 @@ func TestEventDagRunID(t *testing.T) {
 	})
 }
 
+func TestEventQueuedDttm(t *testing.T) {
+	tnnt, err := tenant.NewTenant("someProject", "someNamespace")
+	require.NoError(t, err)
+
+	baseEventValues := func(taskInstance map[string]any) map[string]any {
+		return map[string]any{
+			"event_time":   16000631600.0,
+			"task_id":      "some_txbq",
+			"status":       "running",
+			"scheduled_at": "2022-01-02T15:04:05Z",
+			"event_context": map[string]any{
+				"operator_type": "TASK",
+				"dag_run": map[string]any{
+					"run_id": "scheduled__2026-11-17T05:00:00+00:00",
+				},
+				"task_instance": taskInstance,
+			},
+		}
+	}
+
+	t.Run("parses queued_dttm when the callback carries it", func(t *testing.T) {
+		eventValues := baseEventValues(map[string]any{
+			"queued_dttm": "2026-11-17T05:12:30Z",
+		})
+		event, err := scheduler.EventFrom("TYPE_TASK_START", eventValues, "some_job", tnnt)
+		require.NoError(t, err)
+		require.NotNil(t, event.EventContext)
+		require.NotNil(t, event.EventContext.OperatorRunInstance.QueuedDttm)
+		assert.Equal(t, time.Date(2026, 11, 17, 5, 12, 30, 0, time.UTC),
+			*event.EventContext.OperatorRunInstance.QueuedDttm)
+	})
+
+	t.Run("tolerates a payload without queued_dttm", func(t *testing.T) {
+		eventValues := baseEventValues(map[string]any{})
+		event, err := scheduler.EventFrom("TYPE_TASK_START", eventValues, "some_job", tnnt)
+		require.NoError(t, err)
+		require.NotNil(t, event.EventContext)
+		assert.Nil(t, event.EventContext.OperatorRunInstance.QueuedDttm)
+	})
+}
+
 func TestFromStringToEventType(t *testing.T) {
 	t.Run("FromStringToEventType", func(t *testing.T) {
 		expectationMap := map[string]scheduler.JobEventType{

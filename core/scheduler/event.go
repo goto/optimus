@@ -138,6 +138,8 @@ type OperatorRunInstance struct {
 	State        string     `json:"status"`
 	EndTime      *time.Time `json:"end_date,omitempty"`
 	LogURL       string     `json:"log_url"`
+	// QueuedDttm is when Airflow moved the task into the queue
+	QueuedDttm *time.Time `json:"queued_dttm,omitempty"`
 }
 
 func (o *OperatorRunInstance) IsTerminated() bool {

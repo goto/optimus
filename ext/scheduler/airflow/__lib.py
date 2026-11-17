@@ -782,6 +782,10 @@ class EventContext:
         state: str
         start_date: str = None
         end_date: str = None
+        # queued_dttm is when Airflow moved the task into the queue (2.9+). It
+        # splits the sensor-to-start wait into scheduling and pickup; optional
+        # so older payloads without it keep working.
+        queued_dttm: str = None
 
     @dataclass
     class DagRun:
@@ -824,6 +828,7 @@ class EventContext:
                 state=ti.state,
                 start_date=cls.format_dt(ti.start_date),
                 end_date=cls.format_dt(ti.end_date),
+                queued_dttm=cls.format_dt(getattr(ti, "queued_dttm", None)),
             ),
             dag_run=cls.DagRun(
                 dag_id=ti.dag_id,

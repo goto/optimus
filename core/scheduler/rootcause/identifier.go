@@ -369,7 +369,7 @@ func gatingUpstream(node *scheduler.JobLineageSummary, downstream scheduler.JobR
 		return nil, nil
 	}
 
-	selected := scheduler.SelectUpstreamsForRun(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, &downstream, 1)
+	selected := scheduler.SelectUpstreamsForRun(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, downstream, 1)
 	if len(selected) == 0 {
 		return nil, nil
 	}

@@ -1258,24 +1258,28 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 			walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(21))])
 	})
 
-	t.Run("the legacy job-level view keeps the entry implied by the latest downstream run", func(t *testing.T) {
-		nodeA.RefreshJobRuns()
-		nodeB.RefreshJobRuns()
-
-		assert.Equal(t, runA20, nodeA.JobRuns[scheduler.JobName("job-b")],
-			"B@21 is the latest downstream run reaching A, so its A@20 wins")
-		assert.Equal(t, runB21, nodeB.JobRuns[scheduler.JobName("job-t")])
-		assert.Equal(t, runB16, nodeB.JobRuns[scheduler.JobName("job-m")],
-			"reached by two different downstream jobs, both entries survive")
-
-		// hand-built fixtures without RunsByDownstream fall back to the job-level view
-		legacy := &scheduler.JobLineageSummary{
+	t.Run("GetRunForDownstream falls back to the unambiguous single run of a job name", func(t *testing.T) {
+		single := &scheduler.JobLineageSummary{
 			JobName: "job-x",
 			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
 				scheduler.NewJobRunKey("job-y", runA15.ScheduledAt): runA15,
 			},
 		}
-		assert.Equal(t, runA15, legacy.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(16))))
+		assert.Equal(t, runA15, single.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(16))),
+			"one entry for the downstream job name is unambiguous whatever schedule the caller keys with")
+
+		ambiguous := &scheduler.JobLineageSummary{
+			JobName: "job-x",
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-y", day(15)): runA15,
+				scheduler.NewJobRunKey("job-y", day(20)): runA20,
+			},
+		}
+		assert.Nil(t, ambiguous.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(18))),
+			"two runs of the same downstream job make the lookup ambiguous")
+		assert.Equal(t, runA15, ambiguous.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(15))),
+			"the exact key still wins on ambiguous nodes")
+		assert.Equal(t, runA20, ambiguous.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(20))))
 	})
 
 	t.Run("clipping covers runs the job-level view collapses away", func(t *testing.T) {
@@ -1296,18 +1300,7 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 	})
 
 	t.Run("TargetRun, HasRuns, DistinctRuns and AddRun", func(t *testing.T) {
-		t.Run("TargetRun resolves the self key on a run-keyed node", func(t *testing.T) {
-			node := &scheduler.JobLineageSummary{
-				JobName: "job-t",
-				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
-					scheduler.NewJobRunKey("job-t", day(22)): runT,
-					scheduler.NewJobRunKey("job-b", day(21)): runB21,
-				},
-			}
-			assert.Equal(t, runT, node.TargetRun())
-		})
-
-		t.Run("TargetRun falls back to the job-level view without run keys", func(t *testing.T) {
+		t.Run("TargetRun resolves the self key and is nil without one", func(t *testing.T) {
 			node := &scheduler.JobLineageSummary{
 				JobName: "job-t",
 				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
@@ -1318,7 +1311,7 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 			assert.Nil(t, (&scheduler.JobLineageSummary{JobName: "job-t"}).TargetRun())
 		})
 
-		t.Run("HasRuns sees runs at either granularity", func(t *testing.T) {
+		t.Run("HasRuns sees attached runs", func(t *testing.T) {
 			assert.False(t, (&scheduler.JobLineageSummary{JobName: "job-t"}).HasRuns())
 			assert.True(t, (&scheduler.JobLineageSummary{JobName: "job-t", RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
 				scheduler.NewJobRunKey("job-t", runT.ScheduledAt): runT,
@@ -1343,17 +1336,18 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 			assert.Equal(t, day(16), runs[0].ScheduledAt)
 			assert.Equal(t, day(21), runs[1].ScheduledAt)
 
-			legacy := &scheduler.JobLineageSummary{
+			// a node carrying one entry per downstream job name also deduplicates cleanly
+			perDownstream := &scheduler.JobLineageSummary{
 				JobName: "job-b",
 				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
 					scheduler.NewJobRunKey("job-m", runB16.ScheduledAt): runB16,
 					scheduler.NewJobRunKey("job-t", runB21.ScheduledAt): runB21,
 				},
 			}
-			assert.Len(t, legacy.DistinctRuns(), 2)
+			assert.Len(t, perDownstream.DistinctRuns(), 2)
 		})
 
-		t.Run("AddRun keeps both views in sync with the latest downstream run winning", func(t *testing.T) {
+		t.Run("AddRun keeps one entry per downstream run", func(t *testing.T) {
 			node := &scheduler.JobLineageSummary{JobName: "job-a"}
 			node.AddRun(scheduler.NewJobRunKey("job-b", day(16)), runA15)
 			node.AddRun(scheduler.NewJobRunKey("job-b", day(21)), runA20)
@@ -1361,12 +1355,7 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 			assert.Equal(t, runA15, node.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(16))],
 				"every downstream run keeps its own entry")
 			assert.Equal(t, runA20, node.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(21))])
-			assert.Equal(t, runA20, node.JobRuns[scheduler.JobName("job-b")],
-				"the legacy view must follow the latest downstream run")
-
-			node.AddRun(scheduler.NewJobRunKey("job-b", day(16)), runA15)
-			assert.Equal(t, runA20, node.JobRuns[scheduler.JobName("job-b")],
-				"re-adding an earlier downstream run must not regress the legacy view")
+			assert.Len(t, node.DistinctRuns(), 2)
 		})
 	})
 }

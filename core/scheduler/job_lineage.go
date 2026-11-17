@@ -123,27 +123,11 @@ type JobLineageSummary struct {
 	SLA              SLAConfig
 	Window           *window.Config
 
-	// JobRuns contain the mapping of downstream's job name to their respective job run summaries.
-	// It is a derived legacy view of RunsByDownstream - see RefreshJobRuns.
-	JobRuns map[JobName]*JobRunSummary
-
 	// RunsByDownstream maps the downstream run that reached this job, keyed by the downstream
 	// (job name, scheduledAt), to the run of this job that downstream run implies. A job
 	// reached by several downstream runs carries one entry per downstream run, so every path
 	// through the lineage keeps its own upstream run.
 	RunsByDownstream map[JobRunKey]*JobRunSummary
-}
-
-func (j *JobLineageSummary) GetRunForJob(jobName JobName) *JobRunSummary {
-	return getRunForJob(jobName, j.JobRuns)
-}
-
-func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSummary {
-	if run, exists := jobRuns[jobName]; exists {
-		return run
-	}
-
-	return nil
 }
 
 // GetRunForDownstream returns the run of this job implied by the given downstream run.
@@ -152,10 +136,6 @@ func getRunForJob(jobName JobName, jobRuns map[JobName]*JobRunSummary) *JobRunSu
 // single-run case is unambiguous regardless of which schedule the caller keyed it with.
 // When several runs share the downstream job name the lookup is ambiguous and returns nil.
 func (j *JobLineageSummary) GetRunForDownstream(key JobRunKey) *JobRunSummary {
-	if j.RunsByDownstream == nil {
-		// interim: fixtures that still use the deprecated job-level view
-		return j.GetRunForJob(key.JobName)
-	}
 	if run, exists := j.RunsByDownstream[key]; exists {
 		return run
 	}
@@ -173,60 +153,18 @@ func (j *JobLineageSummary) GetRunForDownstream(key JobRunKey) *JobRunSummary {
 	return match
 }
 
-// RefreshJobRuns rebuilds the legacy JobRuns view from RunsByDownstream. JobRuns is keyed by
-// downstream job name, so when a job is reached by several runs of the same downstream job
-// only one can be represented: the entry implied by the downstream run with the latest
-// scheduledAt wins, keeping the job-level view deterministic.
-func (j *JobLineageSummary) RefreshJobRuns() {
-	if j.RunsByDownstream == nil {
-		return
-	}
-
-	jobRuns := make(map[JobName]*JobRunSummary, len(j.RunsByDownstream))
-	for key, run := range j.RunsByDownstream {
-		if existing, exists := jobRuns[key.JobName]; exists && !existing.ScheduledAt.Before(key.ScheduledAt) {
-			continue
-		}
-		jobRuns[key.JobName] = run
-	}
-	j.JobRuns = jobRuns
-}
-
-// AddRun attaches run as the one implied by the given downstream run and keeps the legacy
-// JobRuns view in sync. Hand-built fixtures use it to attach runs at either granularity;
-// the resolver writes RunsByDownstream directly. In the legacy view the entry implied by
-// the latest downstream run of a job name wins, matching RefreshJobRuns.
+// AddRun attaches run as the one implied by the given downstream run. Test fixtures use it
+// to build lineages; the resolver writes RunsByDownstream directly.
 func (j *JobLineageSummary) AddRun(downstream JobRunKey, run *JobRunSummary) {
 	if j.RunsByDownstream == nil {
 		j.RunsByDownstream = make(map[JobRunKey]*JobRunSummary)
 	}
 	j.RunsByDownstream[downstream] = run
-
-	if j.JobRuns == nil {
-		j.JobRuns = make(map[JobName]*JobRunSummary)
-	}
-	winner := downstream
-	for key := range j.RunsByDownstream {
-		if key.JobName != downstream.JobName {
-			continue
-		}
-		if key.ScheduledAt.After(winner.ScheduledAt) {
-			winner = key
-		}
-	}
-	if winner == downstream {
-		j.JobRuns[downstream.JobName] = run
-	}
 }
 
 // TargetRun returns the run of this lineage's own job: the root node's run, stored under
-// its self key. Nodes other than the root carry no self key and return nil. When the lineage
-// carries no per-downstream-run keys it falls back to the job-level view.
+// its self key. Nodes other than the root carry no self key and return nil.
 func (j *JobLineageSummary) TargetRun() *JobRunSummary {
-	if j.RunsByDownstream == nil {
-		return j.GetRunForJob(j.JobName)
-	}
-
 	var target *JobRunSummary
 	for key, run := range j.RunsByDownstream {
 		if key.JobName != j.JobName {
@@ -239,9 +177,9 @@ func (j *JobLineageSummary) TargetRun() *JobRunSummary {
 	return target
 }
 
-// HasRuns reports whether any run is attached to this node, at either granularity.
+// HasRuns reports whether any run is attached to this node.
 func (j *JobLineageSummary) HasRuns() bool {
-	return len(j.RunsByDownstream) > 0 || len(j.JobRuns) > 0
+	return len(j.RunsByDownstream) > 0
 }
 
 // DistinctRuns returns the runs carried by this node, de-duplicated by scheduledAt and
@@ -249,15 +187,8 @@ func (j *JobLineageSummary) HasRuns() bool {
 // appears once; a job reached by downstream runs implying different scheduledAt appears once
 // per distinct run.
 func (j *JobLineageSummary) DistinctRuns() []*JobRunSummary {
-	unique := make(map[string]*JobRunSummary)
-	if j.RunsByDownstream != nil {
-		for _, run := range j.RunsByDownstream {
-			unique[run.ScheduledAt.UTC().Format(time.RFC3339)] = run
-		}
-		return sortRunsByKey(unique)
-	}
-
-	for _, run := range j.JobRuns {
+	unique := make(map[string]*JobRunSummary, len(j.RunsByDownstream))
+	for _, run := range j.RunsByDownstream {
 		unique[run.ScheduledAt.UTC().Format(time.RFC3339)] = run
 	}
 	return sortRunsByKey(unique)
@@ -289,12 +220,7 @@ func clipLineageNode(node *JobLineageSummary, referenceTime time.Time, visited m
 	}
 	visited[node] = true
 
-	// RunsByDownstream can hold runs the job-level view collapses away, so both maps are
-	// clipped; the pointers are shared and clipping twice is a no-op.
 	for _, run := range node.RunsByDownstream {
-		clipJobRunToReferenceTime(run, referenceTime)
-	}
-	for _, run := range node.JobRuns {
 		clipJobRunToReferenceTime(run, referenceTime)
 	}
 	for _, upstream := range node.Upstreams {
@@ -576,7 +502,7 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 			continue
 		}
 
-		for _, upstream := range SelectUpstreamsForRun(current.lineage, &key, opts.TopUpstreamsPerJob) {
+		for _, upstream := range SelectUpstreamsForRun(current.lineage, key, opts.TopUpstreamsPerJob) {
 			queue = append(queue, queueItem{
 				lineage: upstream,
 				parent:  current.lineage.JobName,
@@ -598,20 +524,11 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 	}
 }
 
-// SelectUpstreams returns the upstreams of job to follow. With topN at zero that is all of
-// them; otherwise it is the N that finished last, which for a completed lineage are the runs
-// that actually held the job up.
-//
-// It ranks by the run each upstream carries for job's own name, so it is only exact when job
-// is reached by a single run; see SelectUpstreamsForRun for the per-downstream-run ranking.
-func SelectUpstreams(job *JobLineageSummary, topN int) []*JobLineageSummary {
-	return SelectUpstreamsForRun(job, nil, topN)
-}
-
-// SelectUpstreamsForRun is SelectUpstreams ranked for one specific downstream run: upstreams
-// are ranked by the run they carry for that downstream run, which is the run that actually
-// gated it. A nil downstreamRun falls back to the job-level view.
-func SelectUpstreamsForRun(job *JobLineageSummary, downstreamRun *JobRunKey, topN int) []*JobLineageSummary {
+// SelectUpstreamsForRun returns the upstreams of job to follow for one specific downstream
+// run. With topN at zero that is all of them; otherwise it is the N that finished last,
+// ranked by the run each upstream carries for that downstream run - the run that actually
+// gated it.
+func SelectUpstreamsForRun(job *JobLineageSummary, downstream JobRunKey, topN int) []*JobLineageSummary {
 	if topN <= 0 || len(job.Upstreams) <= topN {
 		return job.Upstreams
 	}
@@ -619,15 +536,8 @@ func SelectUpstreamsForRun(job *JobLineageSummary, downstreamRun *JobRunKey, top
 	ranked := make([]*JobLineageSummary, len(job.Upstreams))
 	copy(ranked, job.Upstreams)
 
-	runFor := func(upstream *JobLineageSummary) *JobRunSummary {
-		if downstreamRun == nil {
-			return upstream.GetRunForJob(job.JobName)
-		}
-		return upstream.GetRunForDownstream(*downstreamRun)
-	}
-
 	sort.SliceStable(ranked, func(i, k int) bool {
-		iRun, kRun := runFor(ranked[i]), runFor(ranked[k])
+		iRun, kRun := ranked[i].GetRunForDownstream(downstream), ranked[k].GetRunForDownstream(downstream)
 
 		// runs with no finish time cannot be ranked on one, so they sort after those that have
 		// one, newest first

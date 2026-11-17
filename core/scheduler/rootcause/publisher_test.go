@@ -43,6 +43,9 @@ func makeRun(jobName scheduler.JobName, scheduledAt time.Time, taskStart, taskEn
 	}
 	run.TaskStartTime = taskStart
 	run.TaskEndTime = taskEnd
+	// the DAG-level end matches the task end in these fixtures: a finished run
+	// released its dependents when its last work ended
+	run.DagEndTime = taskEnd
 	return run
 }
 
@@ -114,12 +117,29 @@ func TestPublisher_Evaluate(t *testing.T) {
 	targetBaseline := 2*time.Hour + time.Hour
 
 	t.Run("returns nothing when the target did not breach its SLA", func(t *testing.T) {
-		// target finished at 11:00, within its 12:00 deadline
+		// target started two minutes after its schedule (inside the scheduler
+		// delay budget), ran ten minutes, and finished well inside its deadline
 		targetRun := makeRun("job_target", testBaseTime,
-			ptr(testBaseTime.Add(time.Hour)), ptr(testBaseTime.Add(time.Hour+10*time.Minute)), "success")
+			ptr(testBaseTime.Add(2*time.Minute)), ptr(testBaseTime.Add(12*time.Minute)), "success")
 		target := makeLineage("job_target", testTenant, targetRun)
 
 		assert.Empty(t, eval(target, nil, testBaseTime.Add(2*time.Hour)))
+	})
+
+	t.Run("a late-starting root node is charged from its own schedule", func(t *testing.T) {
+		// unified root-node rule, matching the lineage summary: with no upstream
+		// at all, the wait from scheduled_at to task start is scheduler-owned
+		rootRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(30*time.Minute)), ptr(testBaseTime.Add(40*time.Minute)), "running")
+		target := makeLineage("job_target", testTenant, rootRun)
+
+		detections := eval(target, nil, referenceTime)
+
+		matched := detectionsByReason(detections, scheduler.TierSchedulerDelay)
+		if assert.Len(t, matched, 1) {
+			assert.Equal(t, "job_target", matched[0].IncidentKey.JobName.String())
+			assert.Equal(t, int(30*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
+		}
 	})
 
 	t.Run("tier 1 condition A: individually delayed job becomes its own incident", func(t *testing.T) {

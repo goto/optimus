@@ -49,6 +49,7 @@ func createJobRun(jobName string, baseTime, startTime, endTime time.Time) *sched
 		ScheduledAt:   baseTime,
 		JobStartTime:  &startTime,
 		JobEndTime:    &endTime,
+		DagEndTime:    &endTime,
 		TaskStartTime: &startTime,
 		TaskEndTime:   &endTime,
 		HookEndTime:   &endTime,
@@ -98,6 +99,33 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
 
+		assert.Equal(t, int64(600), result.ExecutionSummary.TotalSystemSchedulingDelaySeconds)
+		assert.Equal(t, int64(300), result.ExecutionSummary.AverageSystemSchedulingDelaySeconds)
+	})
+
+	t.Run("should measure the wait from the upstream's DAG-level end, not its last operator", func(t *testing.T) {
+		// the upstream's last operator ends at 15 minutes past, but its DAG-level
+		// success callback (when dependents become free to go) only lands at 25
+		// minutes past. The downstream starts 30 minutes past: 5 minutes of that
+		// is scheduler-owned, the first 15 was still upstream work.
+		upstreamStartTime := baseTime.Add(5 * time.Minute)
+		upstreamOperatorEnd := baseTime.Add(15 * time.Minute)
+		upstreamDagEnd := baseTime.Add(25 * time.Minute)
+		rootStartTime := baseTime.Add(30 * time.Minute)
+		rootEndTime := baseTime.Add(40 * time.Minute)
+
+		upstreamRun := createJobRun("upstream", baseTime, upstreamStartTime, upstreamOperatorEnd)
+		upstreamRun.DagEndTime = &upstreamDagEnd
+		upstream := createJobLineage("upstream", tnnt, &windowConfig, nil,
+			downstreamJobNameAndRunPair{JobName: scheduler.JobName("root"), JobRunSum: upstreamRun})
+		jobLineage := createJobLineage("root", tnnt, &windowConfig, []*scheduler.JobLineageSummary{upstream},
+			createJobRunPair("root", "root", baseTime, rootStartTime, rootEndTime))
+
+		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
+
+		// upstream node: 5m from its own schedule; downstream node: 30m start -
+		// 25m DAG end = 5m; the 10m between operator end and DAG end belongs to
+		// neither
 		assert.Equal(t, int64(600), result.ExecutionSummary.TotalSystemSchedulingDelaySeconds)
 		assert.Equal(t, int64(300), result.ExecutionSummary.AverageSystemSchedulingDelaySeconds)
 	})

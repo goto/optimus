@@ -169,7 +169,7 @@ func clipJobRunToReferenceTime(run *JobRunSummary, referenceTime time.Time) {
 
 	clipped := false
 	for _, field := range []**time.Time{
-		&run.JobStartTime, &run.JobEndTime, &run.WaitStartTime, &run.WaitEndTime,
+		&run.JobStartTime, &run.JobEndTime, &run.DagEndTime, &run.WaitStartTime, &run.WaitEndTime,
 		&run.TaskStartTime, &run.TaskEndTime, &run.HookStartTime, &run.HookEndTime,
 	} {
 		if *field != nil && !(*field).Before(referenceTime) {
@@ -245,9 +245,11 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 
 		// the run was scheduled way too late when it was scheduled after its gating upstream
 		// had already finished: the gap between the upstream's end and this run's schedule is
-		// schedule misalignment, not work in progress
+		// schedule misalignment, not work in progress. The upstream's DAG-level end is used
+		// because that is when the upstream released its dependents -- the moment a
+		// downstream sensor could first observe success.
 		if hasUpstream {
-			if upstreamEnd := upstreamRun.GetActualEndTime(); upstreamEnd != nil && currentRun.ScheduledAt.After(*upstreamEnd) {
+			if upstreamEnd := upstreamRun.DagEndTime; upstreamEnd != nil && currentRun.ScheduledAt.After(*upstreamEnd) {
 				currentScheduledWayTooLate := currentRun.ScheduledAt.Sub(*upstreamEnd)
 				currentExec.DelaySummary.ScheduledWayTooLateSeconds = int64(currentScheduledWayTooLate.Seconds())
 				lineageSummary.TotalScheduledWayTooLateSeconds += currentExec.DelaySummary.ScheduledWayTooLateSeconds
@@ -260,11 +262,13 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 		}
 
 		// system scheduling delay is the wait the scheduler itself is responsible for: from
-		// the later of the run's own schedule and its gating upstream's finish, up to when the
-		// task actually started. Waiting on upstream work is deliberately excluded.
+		// the later of the run's own schedule and its gating upstream's DAG-level finish, up
+		// to when the task actually started. Waiting on upstream work is deliberately
+		// excluded. A root node (no upstream in the path) waits from its own schedule, the
+		// same rule the root-cause publisher applies.
 		schedulerDelay := scheduledToTaskStartDuration
 		if hasUpstream {
-			if upstreamEnd := upstreamRun.GetActualEndTime(); upstreamEnd != nil && upstreamEnd.After(currentRun.ScheduledAt) {
+			if upstreamEnd := upstreamRun.DagEndTime; upstreamEnd != nil && upstreamEnd.After(currentRun.ScheduledAt) {
 				schedulerDelay = currentRun.TaskStartTime.Sub(*upstreamEnd)
 			}
 		}
@@ -632,8 +636,15 @@ type JobRunSummary struct {
 	ScheduledAt time.Time
 	SLATime     *time.Time
 
-	JobStartTime  *time.Time
-	JobEndTime    *time.Time
+	JobStartTime *time.Time
+	JobEndTime   *time.Time
+	// DagEndTime is the DAG-level end: the event time of the DAG's success or
+	// failure callback, stored on job_run.end_time. Unlike JobEndTime (the
+	// last operator's end), this is when the DAG actually finished and its
+	// dependents became free to go -- the moment a downstream sensor can
+	// observe success. It can be nil when the callback never arrived (for
+	// example a manual override that only set the state).
+	DagEndTime    *time.Time
 	JobStatus     string
 	WaitStartTime *time.Time
 	WaitEndTime   *time.Time

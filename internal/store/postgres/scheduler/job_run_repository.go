@@ -667,6 +667,7 @@ SELECT
 	so.scheduled_at,
 	so.job_start_time,
 	COALESCE(so.hook_end_time, so.task_end_time) AS job_end_time,
+	so.job_end_time AS dag_end_time,
 	so.job_status,
 	so.sensor_start_time,
 	so.sensor_end_time,
@@ -699,6 +700,7 @@ ORDER BY so.scheduled_at DESC
 			scheduledAt     time.Time
 			jobStartTime    *time.Time
 			jobEndTime      *time.Time
+			dagEndTime      *time.Time
 			jobStatus       string
 			sensorStartTime *time.Time
 			sensorEndTime   *time.Time
@@ -713,7 +715,7 @@ ORDER BY so.scheduled_at DESC
 			hookAttempts    int
 		)
 
-		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &jobStatus,
+		err = rows.Scan(&jobName, &scheduledAt, &jobStartTime, &jobEndTime, &dagEndTime, &jobStatus,
 			&sensorStartTime, &sensorEndTime,
 			&taskStartTime, &taskEndTime,
 			&hookStartTime, &hookEndTime,
@@ -728,6 +730,7 @@ ORDER BY so.scheduled_at DESC
 			ScheduledAt:   scheduledAt,
 			JobStartTime:  jobStartTime,
 			JobEndTime:    jobEndTime,
+			DagEndTime:    dagEndTime,
 			JobStatus:     jobStatus,
 			WaitStartTime: sensorStartTime,
 			WaitEndTime:   sensorEndTime,

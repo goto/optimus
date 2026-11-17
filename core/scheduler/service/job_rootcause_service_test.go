@@ -174,7 +174,7 @@ func rcMakeRun(
 	status string,
 ) *scheduler.JobRunSummary {
 	slaTime := scheduledAt.Add(sla)
-	return &scheduler.JobRunSummary{
+	run := &scheduler.JobRunSummary{
 		JobName:       jobName,
 		ScheduledAt:   scheduledAt,
 		SLATime:       &slaTime,
@@ -182,6 +182,10 @@ func rcMakeRun(
 		TaskStartTime: taskStart,
 		TaskEndTime:   taskEnd,
 	}
+	// the DAG-level end matches the task end in these fixtures: a finished run
+	// released its dependents when its last work ended
+	run.DagEndTime = taskEnd
+	return run
 }
 
 // rcMakeLineage links a node to its upstreams the way the resolver does: each upstream

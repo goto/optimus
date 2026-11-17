@@ -442,27 +442,44 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, impact
 }
 
 // nodeSchedulingDelay is one node's scheduler-owned wait: from the later of its own
-// schedule and its latest-finished upstream's end until the task started. A node with no
-// finished upstream contributes nothing — a wait with no completed dependency behind it
-// belongs to the missing upstream, not the scheduler; the same holds for a wait behind a
-// failed upstream, whose end time precedes the wait and clamps the delay to zero.
+// schedule and its latest-finished upstream's DAG-level end until the task started.
+// The upstream's DAG-level end is used because that is when the upstream released its
+// dependents; the last operator's end can lag it (the DAG close lag) and would quietly
+// fold that lag into the downstream's wait. Rules, aligned with the lineage summary:
+// a root node with no upstream at all waits from its own schedule; a node whose
+// upstreams exist but none has finished contributes nothing, that wait belongs to the
+// missing upstream; a wait behind a failed upstream clamps to zero, since the
+// upstream's end precedes the wait.
 func nodeSchedulingDelay(walk *scheduler.LineageWalkResult, node *scheduler.JobExecutionSummary) time.Duration {
 	run := node.JobRunSummary
 	if run.TaskStartTime == nil {
 		return 0
 	}
+
+	upstreamKeys := walk.UpstreamsByKey[node.Key()]
+	if len(upstreamKeys) == 0 {
+		// root node: no dependency behind it, so the wait from its own
+		// schedule is scheduler-owned (same rule as the lineage summary)
+		return max0(run.TaskStartTime.Sub(run.ScheduledAt))
+	}
+
 	upstream := latestFinishedUpstream(walk, node)
 	if upstream == nil {
+		// upstreams exist but none has finished: the wait belongs to them
 		return 0
 	}
 	delay := run.TaskStartTime.Sub(run.ScheduledAt)
-	if upstreamEnd := upstream.JobRunSummary.GetActualEndTime(); upstreamEnd.After(run.ScheduledAt) {
+	if upstreamEnd := upstream.JobRunSummary.DagEndTime; upstreamEnd != nil && upstreamEnd.After(run.ScheduledAt) {
 		delay = run.TaskStartTime.Sub(*upstreamEnd)
 	}
-	if delay < 0 {
+	return max0(delay)
+}
+
+func max0(d time.Duration) time.Duration {
+	if d < 0 {
 		return 0
 	}
-	return delay
+	return d
 }
 
 // schedulerDelayBudget is the total scheduling wait a measured path of the given depth

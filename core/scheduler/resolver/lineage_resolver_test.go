@@ -759,7 +759,10 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 // schedule" the way the real JobRunService does, without needing a window-config lookup.
 type cronJobRunService struct{ MockJobRunService }
 
-func (c *cronJobRunService) GetExpectedRunSchedules(_ context.Context, _ *tenant.Project, _ string, _ window.Config, upstreamSchedule string, referenceTime time.Time) ([]time.Time, error) {
+func (c *cronJobRunService) GetExpectedRunSchedules(
+	_ context.Context, _ *tenant.Project, _ string, _ window.Config,
+	upstreamSchedule string, referenceTime time.Time,
+) ([]time.Time, error) {
 	spec, err := cron.ParseCronSchedule(upstreamSchedule)
 	if err != nil {
 		return nil, err
@@ -767,7 +770,9 @@ func (c *cronJobRunService) GetExpectedRunSchedules(_ context.Context, _ *tenant
 	return []time.Time{spec.Prev(referenceTime.Add(time.Second))}, nil
 }
 
-func (c *cronJobRunService) GetJobRunsByIdentifiers(context.Context, []scheduler.JobRunIdentifier) ([]*scheduler.JobRunSummary, error) {
+func (c *cronJobRunService) GetJobRunsByIdentifiers(
+	context.Context, []scheduler.JobRunIdentifier,
+) ([]*scheduler.JobRunSummary, error) {
 	return []*scheduler.JobRunSummary{}, nil
 }
 

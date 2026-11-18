@@ -1,11 +1,13 @@
 package rootcause_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/rootcause"
@@ -360,6 +362,194 @@ func TestPublisher_Evaluate(t *testing.T) {
 			"the no-baseline job is reported as skipped, not counted at full length")
 	})
 
+	t.Run("evidence carries the breach origins and the origin-to-target chain", func(t *testing.T) {
+		// chain target <- a1(p_a) <- a2(p_a) <- b1(p_b), with a synthetic finding whose
+		// sole inferred-SLA breach origin is b1 at level 3
+		b1Run := makeRun("job_b1", testBaseTime.Add(-3*time.Hour),
+			ptr(testBaseTime.Add(-3*time.Hour)), ptr(testBaseTime.Add(-2*time.Hour-15*time.Minute)), "success")
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
+			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-1*time.Hour-35*time.Minute)), "success")
+		a1Run := makeRun("job_a1", testBaseTime.Add(-90*time.Minute),
+			ptr(testBaseTime.Add(-90*time.Minute)), ptr(testBaseTime.Add(-70*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_a1", tenantProjA, a1Run,
+				makeLineage("job_a2", tenantProjA, a2Run,
+					makeLineage("job_b1", tenantProjB, b1Run))))
+
+		originState := &scheduler.JobState{
+			JobName: "job_b1",
+			Tenant:  tenantProjB,
+			JobSLAState: scheduler.JobSLAState{
+				InferredSLA:       ptr(testBaseTime.Add(30 * time.Minute)),
+				EstimatedDuration: durPtr(time.Hour),
+			},
+			Status: scheduler.SLABreachCauseRunningLate,
+			JobRun: scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-3 * time.Hour)},
+		}
+		finding := &rootcause.BreachFinding{
+			Origins: []*scheduler.JobState{originState},
+			OriginPaths: [][]*scheduler.JobState{{
+				{JobName: "job_target", Tenant: testTenant, JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(2 * time.Hour))}},
+				{JobName: "job_a1", Tenant: tenantProjA, JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(90 * time.Minute))}},
+				{JobName: "job_a2", Tenant: tenantProjA, JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(time.Hour))}},
+				originState,
+			}},
+			Bottleneck: rootcause.BottleneckPath{
+				Pred:  map[scheduler.JobName]scheduler.JobName{"job_a1": "job_target", "job_a2": "job_a1", "job_b1": "job_a2"},
+				Level: map[scheduler.JobName]int{"job_target": 0, "job_a1": 1, "job_a2": 2, "job_b1": 3},
+			},
+		}
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": targetBaseline,
+			"job_b1":     time.Minute,
+			"job_a2":     time.Minute,
+			"job_a1":     time.Minute,
+		}
+
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+
+		for _, detection := range detectionsByReason(detections, scheduler.TierRuntimeDelay) {
+			origins := detection.Reason.Evidence.BreachSources
+			assert.Len(t, origins, 1)
+			origin := origins[0]
+			assert.Equal(t, "p_b", origin.Project)
+			assert.Equal(t, "job_b1", origin.Job)
+			assert.Equal(t, 3, origin.Level, "three hops from the target")
+			assert.Equal(t, scheduler.SLABreachCauseRunningLate, scheduler.SLABreachCause(origin.Status))
+			assert.Equal(t, testBaseTime.Add(30*time.Minute).UTC(), *origin.InferredSLA,
+				"the inferred deadline is when the origin was detected as breaching")
+			assert.Equal(t, testBaseTime.Add(-3*time.Hour).UTC(), *origin.ScheduledAt)
+			assert.Equal(t, int(time.Hour/time.Second), *origin.EstimatedDurationSeconds)
+
+			// the chain traces origin → target with descending levels
+			assert.Len(t, origin.Chain, 4)
+			assert.Equal(t, "job_b1", origin.Chain[0].Job)
+			assert.Equal(t, 3, origin.Chain[0].Level)
+			assert.Equal(t, "job_a2", origin.Chain[1].Job)
+			assert.Equal(t, 2, origin.Chain[1].Level)
+			assert.Equal(t, testBaseTime.Add(time.Hour).UTC(), *origin.Chain[1].InferredSLA)
+			assert.Equal(t, "job_a1", origin.Chain[2].Job)
+			assert.Equal(t, 1, origin.Chain[2].Level)
+			assert.Equal(t, "job_target", origin.Chain[3].Job)
+			assert.Equal(t, 0, origin.Chain[3].Level)
+			assert.Equal(t, testBaseTime.Add(2*time.Hour).UTC(), *origin.Chain[3].InferredSLA)
+
+			// every calculation component carries its target-relative level and
+			// whether its job is itself a breach source
+			for _, component := range detection.Reason.Evidence.Runtime.CalculationComponents {
+				assert.Equal(t, finding.Bottleneck.Level[scheduler.JobName(component.Job)], component.Level)
+				assert.Equal(t, component.Job == "job_b1", component.IsBreachSource,
+					"only the origin job is marked as a breach source")
+			}
+		}
+	})
+
+	t.Run("failed upstream evidence carries the origins without a rule", func(t *testing.T) {
+		// a2 failed; the synthetic finding names it as the breach origin with no
+		// reconstructable path
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
+			ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-110*time.Minute)), "failed")
+		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-90*time.Minute)), ptr(testBaseTime.Add(-80*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_b1", tenantProjB, b1Run,
+				makeLineage("job_a2", tenantProjA, a2Run)))
+
+		finding := &rootcause.BreachFinding{
+			Origins: []*scheduler.JobState{{
+				JobName: "job_a2",
+				Tenant:  tenantProjA,
+				Status:  scheduler.SLABreachCauseRunningLate,
+				JobRun:  scheduler.JobRunSummary{JobName: "job_a2", ScheduledAt: testBaseTime.Add(-2 * time.Hour)},
+			}},
+		}
+
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target:          target,
+			HistoricalByJob: map[scheduler.JobName]time.Duration{"job_target": 90 * time.Minute},
+			ReferenceTime:   referenceTime,
+			Finding:         finding,
+		})
+
+		failed := detectionsByReason(detections, scheduler.TierFailedUpstream)
+		assert.Len(t, failed, 1)
+		evidence := failed[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Empty(t, evidence.Rule, "the failed-upstream evidence carries no rule")
+		assert.Len(t, evidence.BreachSources, 1)
+		assert.Equal(t, "job_a2", evidence.BreachSources[0].Job)
+		assert.Empty(t, evidence.BreachSources[0].Chain, "no reconstructable path, no chain")
+
+		// the JSON omits the rule key entirely
+		raw, err := json.Marshal(evidence)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), `"rule"`)
+	})
+
+	t.Run("the origin chain is capped keeping the origin side", func(t *testing.T) {
+		// the finding's path holds 25 nodes; the stored chain keeps the 20 closest to
+		// the origin (the deepest hops)
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		path := []*scheduler.JobState{{
+			JobName: "job_target", Tenant: testTenant,
+			JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(2 * time.Hour))},
+		}}
+		levels := map[scheduler.JobName]int{"job_target": 0}
+		for i := 1; i <= 23; i++ {
+			name := scheduler.JobName(fmt.Sprintf("job_d%02d", i))
+			path = append(path, &scheduler.JobState{
+				JobName: name, Tenant: tenantProjA,
+				JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(time.Duration(24-i) * time.Hour))},
+			})
+			levels[name] = i
+		}
+		path = append(path, &scheduler.JobState{
+			JobName: "job_upstream", Tenant: testTenant,
+			JobSLAState: scheduler.JobSLAState{InferredSLA: ptr(testBaseTime.Add(time.Hour))},
+		})
+		levels["job_upstream"] = 24
+
+		finding := &rootcause.BreachFinding{
+			Origins: []*scheduler.JobState{{
+				JobName: "job_upstream", Tenant: testTenant,
+				Status: scheduler.SLABreachCauseRunningLate,
+				JobRun: scheduler.JobRunSummary{JobName: "job_upstream", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			}},
+			OriginPaths: [][]*scheduler.JobState{path},
+			Bottleneck:  rootcause.BottleneckPath{Level: levels},
+		}
+
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target:          target,
+			HistoricalByJob: map[scheduler.JobName]time.Duration{"job_target": targetBaseline, "job_upstream": 10 * time.Minute},
+			ReferenceTime:   referenceTime,
+			Finding:         finding,
+		})
+
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		chain := matched[0].Reason.Evidence.BreachSources[0].Chain
+		assert.Len(t, chain, scheduler.MaxEvidenceComponents)
+		assert.Equal(t, "job_upstream", chain[0].Job, "the origin side is kept")
+		assert.Equal(t, 24, chain[0].Level)
+		assert.Equal(t, "job_d05", chain[len(chain)-1].Job)
+		assert.Equal(t, 5, chain[len(chain)-1].Level)
+	})
+
 	t.Run("project evidence caps its components at twenty", func(t *testing.T) {
 		// 25 upstreams of one project each induce 5m: no individual detection, the 125m
 		// flat sum fires once, and the evidence keeps the 20 biggest contributors
@@ -562,6 +752,49 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, int(30*time.Minute/time.Second), *waiting.EstimatedDurationSeconds)
 		assert.Equal(t, testBaseTime.Add(90*time.Minute).UTC(), *waiting.LatestSafeStart)
 		assert.False(t, waiting.HasMissingUpstreamRun, "the upstream succeeded; the node waits on nothing missing")
+	})
+
+	t.Run("tier 5 flags a never-created upstream run with has_missing_upstream_run", func(t *testing.T) {
+		// b1 is stuck waiting on its upstream, whose expected run was never created
+		// (not_scheduled): the flag tells the reader the node waits on a run that
+		// does not exist, not on a finished one
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour), nil, nil, "")
+		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour), nil, nil, "queued")
+		b1Run.WaitStartTime = ptr(testBaseTime.Add(-time.Hour))
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_b1", tenantProjB, b1Run,
+				makeLineage("job_a2", tenantProjA, a2Run)))
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+		}
+
+		finding := permissiveFinding(target)
+		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
+			"job_b1": {
+				JobName: "job_b1",
+				JobSLAState: scheduler.JobSLAState{
+					InferredSLA:       ptr(testBaseTime.Add(2 * time.Hour)),
+					EstimatedDuration: durPtr(30 * time.Minute),
+				},
+				Status: scheduler.SLABreachCauseNotStarted,
+				JobRun: scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			},
+		}
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+
+		matched := detectionsByReason(detections, scheduler.TierWaitingUpstream)
+		assert.Len(t, matched, 1)
+		waiting := matched[0].Reason.Evidence.WaitingUpstream
+		assert.NotNil(t, waiting)
+		assert.Equal(t, string(scheduler.StateWaitUpstream), waiting.NodeState)
+		assert.True(t, waiting.HasMissingUpstreamRun,
+			"the upstream run was never created; that is what the flag tells the reader")
 	})
 
 	t.Run("tier 5 skipped while the upstream is still running; tier 1 reports the slow run", func(t *testing.T) {

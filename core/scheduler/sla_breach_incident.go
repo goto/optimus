@@ -118,6 +118,37 @@ type ReasonEvidence struct {
 	ThirdParty      *ThirdPartyEvidence      `json:"third_party,omitempty"`
 	WaitingUpstream *WaitingUpstreamEvidence `json:"waiting_upstream,omitempty"`
 	AggressiveSLA   *AggressiveSLAEvidence   `json:"aggressive_sla,omitempty"`
+
+	// BreachSources records the inferred-SLA breach sources of the impacted target
+	// behind this detection: which job breached, at which level relative to the
+	// target, and around what time it crossed — with the source→target chain for
+	// level-by-level tracing. The sources of the winning (max-delay) observation
+	// are the stored ones.
+	BreachSources []EvidenceBreachSource `json:"breach_sources,omitempty"`
+}
+
+// EvidenceBreachSource is one inferred-SLA breach source of the impacted target: the
+// job where the breach started (breaching its inferred SLA with no breaching direct
+// upstream). Level counts hops from the target (the target itself is level 0).
+type EvidenceBreachSource struct {
+	Project                  string              `json:"project"`
+	Job                      string              `json:"job"`
+	ScheduledAt              *time.Time          `json:"scheduled_at,omitempty"`
+	Level                    int                 `json:"level"`
+	Status                   string              `json:"status,omitempty"` // RUNNING_LATE | NOT_STARTED
+	InferredSLA              *time.Time          `json:"inferred_sla,omitempty"`
+	LatestSafeStart          *time.Time          `json:"latest_safe_start,omitempty"` // NOT_STARTED only
+	EstimatedDurationSeconds *int                `json:"estimated_duration_seconds,omitempty"`
+	Chain                    []EvidenceChainNode `json:"chain,omitempty"`
+}
+
+// EvidenceChainNode is one hop of the breach-source→target trace, ordered from the
+// source down to the target (levels descend toward 0).
+type EvidenceChainNode struct {
+	Project     string     `json:"project"`
+	Job         string     `json:"job"`
+	Level       int        `json:"level"`
+	InferredSLA *time.Time `json:"inferred_sla,omitempty"`
 }
 
 // ComponentBase is the part every component kind shares. It is embedded, so its
@@ -128,6 +159,11 @@ type ComponentBase struct {
 	// InducedSeconds is this job's contribution to the reason's induced delay.
 	InducedSeconds int        `json:"induced_seconds"`
 	ScheduledAt    *time.Time `json:"scheduled_at,omitempty"`
+	// Level counts hops from the impacted target (the target itself is level 0).
+	Level int `json:"level"`
+	// IsBreachSource marks a component whose job is also one of the reason's
+	// breach sources.
+	IsBreachSource bool `json:"is_breach_source,omitempty"`
 }
 
 // evidenceSort exposes the shared keys CapComponents orders components by.

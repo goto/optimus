@@ -63,8 +63,14 @@ func TestGroupDetections(t *testing.T) {
 
 	t.Run("merges duplicate reasons keeping max induced delay and freshest evidence", func(t *testing.T) {
 		key := incidentKey("p_proj", "job_root", baseTime)
-		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold}
-		secondEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, Runtime: &scheduler.RuntimeEvidence{MaxNode: "p_proj/job_root"}}
+		firstEvidence := &scheduler.ReasonEvidence{
+			Rule:          scheduler.EvidenceRuleRuntimeJobOverThreshold,
+			BreachSources: []scheduler.EvidenceBreachSource{{Project: "p_a", Job: "job_old_origin", Level: 5}},
+		}
+		secondEvidence := &scheduler.ReasonEvidence{
+			Rule: scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, Runtime: &scheduler.RuntimeEvidence{MaxNode: "p_proj/job_root"},
+			BreachSources: []scheduler.EvidenceBreachSource{{Project: "p_b", Job: "job_new_origin", Level: 2}},
+		}
 		detections := []scheduler.RootCauseDetection{
 			{
 				IncidentKey: key,
@@ -105,6 +111,9 @@ func TestGroupDetections(t *testing.T) {
 		assert.Equal(t, scheduler.DelayScopeProject, reasons[0].DelayScope)
 		assert.Equal(t, 20*60, reasons[0].MaxNodeInducedDelaySeconds)
 		assert.Same(t, secondEvidence, reasons[0].Evidence)
+		assert.Len(t, reasons[0].Evidence.BreachSources, 1)
+		assert.Equal(t, "job_new_origin", reasons[0].Evidence.BreachSources[0].Job,
+			"the winning observation's breach sources are the stored ones")
 	})
 
 	t.Run("equal delays keep the first evidence", func(t *testing.T) {
@@ -368,6 +377,53 @@ func TestRootCauseDetailsEvidenceSerialization(t *testing.T) {
 						BaselineSeconds: scheduler.IntPtr(600),
 					}},
 				},
+			},
+		}}}
+
+		raw, err := json.Marshal(details)
+		require.NoError(t, err)
+		var decoded scheduler.RootCauseDetails
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+
+		assert.Equal(t, details, decoded)
+	})
+
+	t.Run("evidence with breach sources round-trips through the details JSON", func(t *testing.T) {
+		details := scheduler.RootCauseDetails{Reasons: []scheduler.RootCauseReasonDetail{{
+			Reason:              scheduler.TierRuntimeDelay,
+			Status:              scheduler.ReasonStatusActive,
+			InducedDelaySeconds: 2100,
+			DelayScope:          scheduler.DelayScopeJob,
+			Evidence: &scheduler.ReasonEvidence{
+				ReferenceTime:    safeStart,
+				Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
+				ThresholdSeconds: 1800,
+				Runtime: &scheduler.RuntimeEvidence{
+					CalculationComponentsTotal: 1,
+					CalculationComponents: []scheduler.RuntimeComponent{{
+						ComponentBase: scheduler.ComponentBase{
+							Project:        "p_root",
+							Job:            "job_upstream",
+							InducedSeconds: 2100,
+							Level:          1,
+							IsBreachSource: true,
+						},
+						TaskStart:       scheduler.TimePtr(safeStart),
+						End:             scheduler.TimePtr(safeStart.Add(45 * time.Minute)),
+						EndSource:       scheduler.EvidenceSourceActualEnd,
+						ObservedSeconds: scheduler.IntPtr(2700),
+						BaselineSeconds: scheduler.IntPtr(600),
+					}},
+				},
+				BreachSources: []scheduler.EvidenceBreachSource{{
+					Project: "p_b", Job: "job_b1", Level: 3,
+					Status:      string(scheduler.SLABreachCauseRunningLate),
+					InferredSLA: scheduler.TimePtr(safeStart),
+					Chain: []scheduler.EvidenceChainNode{
+						{Project: "p_b", Job: "job_b1", Level: 3, InferredSLA: scheduler.TimePtr(safeStart)},
+						{Project: "p_root", Job: "job_target", Level: 0},
+					},
+				}},
 			},
 		}}}
 

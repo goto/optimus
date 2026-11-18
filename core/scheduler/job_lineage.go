@@ -177,6 +177,88 @@ func (j *JobLineageSummary) RefreshJobRuns() {
 	j.JobRuns = jobRuns
 }
 
+// AddRun attaches run as the one implied by the given downstream run and keeps the legacy
+// JobRuns view in sync. Hand-built fixtures use it to attach runs at either granularity;
+// the resolver writes RunsByDownstream directly. In the legacy view the entry implied by
+// the latest downstream run of a job name wins, matching RefreshJobRuns.
+func (j *JobLineageSummary) AddRun(downstream JobRunKey, run *JobRunSummary) {
+	if j.RunsByDownstream == nil {
+		j.RunsByDownstream = make(map[JobRunKey]*JobRunSummary)
+	}
+	j.RunsByDownstream[downstream] = run
+
+	if j.JobRuns == nil {
+		j.JobRuns = make(map[JobName]*JobRunSummary)
+	}
+	winner := downstream
+	for key := range j.RunsByDownstream {
+		if key.JobName != downstream.JobName {
+			continue
+		}
+		if key.ScheduledAt.After(winner.ScheduledAt) {
+			winner = key
+		}
+	}
+	if winner == downstream {
+		j.JobRuns[downstream.JobName] = run
+	}
+}
+
+// TargetRun returns the run of this lineage's own job: the root node's run, stored under
+// its self key. Nodes other than the root carry no self key and return nil. When the lineage
+// carries no per-downstream-run keys it falls back to the job-level view.
+func (j *JobLineageSummary) TargetRun() *JobRunSummary {
+	if j.RunsByDownstream == nil {
+		return j.GetRunForJob(j.JobName)
+	}
+
+	var target *JobRunSummary
+	for key, run := range j.RunsByDownstream {
+		if key.JobName != j.JobName {
+			continue
+		}
+		if target == nil || key.ScheduledAt.After(target.ScheduledAt) {
+			target = run
+		}
+	}
+	return target
+}
+
+// HasRuns reports whether any run is attached to this node, at either granularity.
+func (j *JobLineageSummary) HasRuns() bool {
+	return len(j.RunsByDownstream) > 0 || len(j.JobRuns) > 0
+}
+
+// DistinctRuns returns the runs carried by this node, de-duplicated by scheduledAt and
+// sorted ascending. A job reached by several downstream runs that imply the same scheduledAt
+// appears once; a job reached by downstream runs implying different scheduledAt appears once
+// per distinct run.
+func (j *JobLineageSummary) DistinctRuns() []*JobRunSummary {
+	unique := make(map[string]*JobRunSummary)
+	if j.RunsByDownstream != nil {
+		for _, run := range j.RunsByDownstream {
+			unique[run.ScheduledAt.UTC().Format(time.RFC3339)] = run
+		}
+		return sortRunsByKey(unique)
+	}
+
+	for _, run := range j.JobRuns {
+		unique[run.ScheduledAt.UTC().Format(time.RFC3339)] = run
+	}
+	return sortRunsByKey(unique)
+}
+
+func sortRunsByKey(runs map[string]*JobRunSummary) []*JobRunSummary {
+	out := make([]*JobRunSummary, 0, len(runs))
+	for _, run := range runs {
+		out = append(out, run)
+	}
+	sort.Slice(out, func(i, k int) bool {
+		return out[i].ScheduledAt.Before(out[k].ScheduledAt)
+	})
+	return out
+}
+
 // ClipLineageRunsToReferenceTime walks the lineage and hides any observed run timestamp that
 // falls at or after referenceTime
 func ClipLineageRunsToReferenceTime(lineages map[JobName]*JobLineageSummary, referenceTime time.Time) {
@@ -384,7 +466,7 @@ func (j *JobLineageSummary) GenerateLineageExecutionSummary(opts LineageWalkOpti
 		TotalNodes:       walk.TotalNodes,
 		Truncated:        walk.Truncated,
 	}
-	if targetRun := j.GetRunForJob(j.JobName); targetRun != nil {
+	if targetRun := j.TargetRun(); targetRun != nil {
 		lineage.ScheduledAt = targetRun.ScheduledAt
 	}
 
@@ -433,7 +515,7 @@ func (j *JobLineageSummary) GetLineageNodes(opts LineageWalkOptions) *LineageWal
 
 		// the root's run is its own; every other node's run is the one implied by the
 		// downstream run that reached it
-		run := current.lineage.GetRunForJob(current.lineage.JobName)
+		run := current.lineage.TargetRun()
 		if current.from != nil {
 			run = current.lineage.GetRunForDownstream(*current.from)
 		}

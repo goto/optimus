@@ -557,7 +557,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				IsJobFinished:              maxNode.JobRunSummary.IsFinished(),
 				DelayScope:                 scheduler.DelayScopeProject,
 				MaxNodeInducedDelaySeconds: int(maxJobDelay.Seconds()),
-				Evidence:                   runtimeProjectEvidence(path, observations, maxProject, maxNode, maxTotal, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
+				Evidence:                   runtimeProjectEvidence(path, observations, maxProject, maxNode, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -572,16 +572,17 @@ func runtimeJobEvidence(node *scheduler.JobExecutionSummary, obs runtimeObservat
 		ReferenceTime:    referenceTime.UTC(),
 		Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
 		ThresholdSeconds: int(threshold.Seconds()),
-		TotalSeconds:     int(obs.Induced.Seconds()),
-		ComponentsTotal:  1,
-		Components:       []scheduler.EvidenceComponent{runtimeComponent(node, obs)},
+		Runtime: &scheduler.RuntimeEvidence{
+			CalculationComponentsTotal: 1,
+			CalculationComponents:      []scheduler.RuntimeComponent{runtimeComponent(node, obs)},
+		},
 	}
 }
 
 // runtimeProjectEvidence records a project-level runtime roll-up: every project job on
 // the path that contributed to the sum, plus the jobs skipped for having no baseline.
-func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations map[*scheduler.JobExecutionSummary]runtimeObservation, projectName tenant.ProjectName, maxNode *scheduler.JobExecutionSummary, total time.Duration, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
-	var components []scheduler.EvidenceComponent
+func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations map[*scheduler.JobExecutionSummary]runtimeObservation, projectName tenant.ProjectName, maxNode *scheduler.JobExecutionSummary, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
+	var components []scheduler.RuntimeComponent
 	var skippedNoBaseline []string
 	for _, node := range path {
 		if node.ProjectName != projectName {
@@ -607,24 +608,27 @@ func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations 
 	capped, componentsTotal := scheduler.CapComponents(components)
 
 	return &scheduler.ReasonEvidence{
-		ReferenceTime:     referenceTime.UTC(),
-		Rule:              scheduler.EvidenceRuleRuntimeProjectSumOverThreshold,
-		ThresholdSeconds:  int(threshold.Seconds()),
-		TotalSeconds:      int(total.Seconds()),
-		MaxNode:           projectName.String() + "/" + maxNode.JobName.String(),
-		ComponentsTotal:   componentsTotal,
-		Components:        capped,
-		SkippedNoBaseline: skippedNoBaseline,
+		ReferenceTime:    referenceTime.UTC(),
+		Rule:             scheduler.EvidenceRuleRuntimeProjectSumOverThreshold,
+		ThresholdSeconds: int(threshold.Seconds()),
+		Runtime: &scheduler.RuntimeEvidence{
+			MaxNode:                    projectName.String() + "/" + maxNode.JobName.String(),
+			CalculationComponentsTotal: componentsTotal,
+			CalculationComponents:      capped,
+			SkippedNoBaseline:          skippedNoBaseline,
+		},
 	}
 }
 
 // runtimeComponent is one job's runtime measurement as an evidence component.
-func runtimeComponent(node *scheduler.JobExecutionSummary, obs runtimeObservation) scheduler.EvidenceComponent {
-	return scheduler.EvidenceComponent{
-		Project:         node.ProjectName.String(),
-		Job:             node.JobName.String(),
-		InducedSeconds:  int(obs.Induced.Seconds()),
-		ScheduledAt:     scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
+func runtimeComponent(node *scheduler.JobExecutionSummary, obs runtimeObservation) scheduler.RuntimeComponent {
+	return scheduler.RuntimeComponent{
+		ComponentBase: scheduler.ComponentBase{
+			Project:        node.ProjectName.String(),
+			Job:            node.JobName.String(),
+			InducedSeconds: int(obs.Induced.Seconds()),
+			ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
+		},
 		TaskStart:       obs.TaskStart,
 		End:             scheduler.TimePtr(obs.End),
 		EndSource:       obs.EndSource,

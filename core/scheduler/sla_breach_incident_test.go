@@ -63,8 +63,8 @@ func TestGroupDetections(t *testing.T) {
 
 	t.Run("merges duplicate reasons keeping max induced delay and freshest evidence", func(t *testing.T) {
 		key := incidentKey("p_proj", "job_root", baseTime)
-		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 31 * 60}
-		secondEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, TotalSeconds: 45 * 60, MaxNode: "p_proj/job_root"}
+		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold}
+		secondEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, Runtime: &scheduler.RuntimeEvidence{MaxNode: "p_proj/job_root"}}
 		detections := []scheduler.RootCauseDetection{
 			{
 				IncidentKey: key,
@@ -109,7 +109,7 @@ func TestGroupDetections(t *testing.T) {
 
 	t.Run("equal delays keep the first evidence", func(t *testing.T) {
 		key := incidentKey("p_proj", "job_root", baseTime)
-		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 45 * 60}
+		firstEvidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold}
 		detections := []scheduler.RootCauseDetection{
 			{
 				IncidentKey: key,
@@ -272,7 +272,7 @@ func TestMergeResolvedReasons(t *testing.T) {
 	})
 
 	t.Run("a resolved reason keeps its evidence", func(t *testing.T) {
-		evidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold, TotalSeconds: 2400}
+		evidence := &scheduler.ReasonEvidence{Rule: scheduler.EvidenceRuleRuntimeJobOverThreshold}
 		fresh := &scheduler.SLABreachIncident{Key: key}
 		previous := &scheduler.SLABreachIncident{
 			Key: key,
@@ -353,18 +353,21 @@ func TestRootCauseDetailsEvidenceSerialization(t *testing.T) {
 				ReferenceTime:    safeStart,
 				Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
 				ThresholdSeconds: 1800,
-				TotalSeconds:     2100,
-				ComponentsTotal:  1,
-				Components: []scheduler.EvidenceComponent{{
-					Project:         "p_root",
-					Job:             "job_upstream",
-					InducedSeconds:  2100,
-					TaskStart:       scheduler.TimePtr(safeStart),
-					End:             scheduler.TimePtr(safeStart.Add(45 * time.Minute)),
-					EndSource:       scheduler.EvidenceSourceActualEnd,
-					ObservedSeconds: scheduler.IntPtr(2700),
-					BaselineSeconds: scheduler.IntPtr(600),
-				}},
+				Runtime: &scheduler.RuntimeEvidence{
+					CalculationComponentsTotal: 1,
+					CalculationComponents: []scheduler.RuntimeComponent{{
+						ComponentBase: scheduler.ComponentBase{
+							Project:        "p_root",
+							Job:            "job_upstream",
+							InducedSeconds: 2100,
+						},
+						TaskStart:       scheduler.TimePtr(safeStart),
+						End:             scheduler.TimePtr(safeStart.Add(45 * time.Minute)),
+						EndSource:       scheduler.EvidenceSourceActualEnd,
+						ObservedSeconds: scheduler.IntPtr(2700),
+						BaselineSeconds: scheduler.IntPtr(600),
+					}},
+				},
 			},
 		}}}
 

@@ -157,9 +157,10 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, scheduler.EvidenceRuleRuntimeJobOverThreshold, evidence.Rule)
 		assert.Equal(t, referenceTime.UTC(), evidence.ReferenceTime)
 		assert.Equal(t, int((30 * time.Minute).Seconds()), evidence.ThresholdSeconds)
-		assert.Equal(t, int(35*time.Minute/time.Second), evidence.TotalSeconds)
-		assert.Len(t, evidence.Components, 1)
-		component := evidence.Components[0]
+		runtime := evidence.Runtime
+		assert.NotNil(t, runtime)
+		assert.Len(t, runtime.CalculationComponents, 1)
+		component := runtime.CalculationComponents[0]
 		assert.Equal(t, "p_root", component.Project)
 		assert.Equal(t, "job_upstream", component.Job)
 		assert.Equal(t, int(35*time.Minute/time.Second), component.InducedSeconds)
@@ -168,7 +169,7 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, scheduler.EvidenceSourceActualEnd, component.EndSource)
 		assert.Equal(t, int(45*time.Minute/time.Second), *component.ObservedSeconds)
 		assert.Equal(t, int(10*time.Minute/time.Second), *component.BaselineSeconds)
-		assert.Nil(t, evidence.Facts)
+		assert.Nil(t, evidence.Scheduler, "a job-scoped reason fills only its own section")
 	})
 
 	t.Run("a job without a baseline is skipped instead of counting its whole runtime", func(t *testing.T) {
@@ -279,16 +280,17 @@ func TestPublisher_Evaluate(t *testing.T) {
 		projectEvidence := projectDetection.Reason.Evidence
 		assert.NotNil(t, projectEvidence)
 		assert.Equal(t, scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, projectEvidence.Rule)
-		assert.Equal(t, int(43*time.Minute/time.Second), projectEvidence.TotalSeconds)
-		assert.Equal(t, "p_a/job_a2", projectEvidence.MaxNode)
-		assert.Equal(t, 2, projectEvidence.ComponentsTotal)
-		assert.Len(t, projectEvidence.Components, 2)
+		projectRuntime := projectEvidence.Runtime
+		assert.NotNil(t, projectRuntime)
+		assert.Equal(t, "p_a/job_a2", projectRuntime.MaxNode)
+		assert.Equal(t, 2, projectRuntime.CalculationComponentsTotal)
+		assert.Len(t, projectRuntime.CalculationComponents, 2)
 		// sorted largest first
-		assert.Equal(t, "job_a2", projectEvidence.Components[0].Job)
-		assert.Equal(t, int(24*time.Minute/time.Second), projectEvidence.Components[0].InducedSeconds)
-		assert.Equal(t, "job_a1", projectEvidence.Components[1].Job)
-		assert.Equal(t, int(19*time.Minute/time.Second), projectEvidence.Components[1].InducedSeconds)
-		assert.Empty(t, projectEvidence.SkippedNoBaseline)
+		assert.Equal(t, "job_a2", projectRuntime.CalculationComponents[0].Job)
+		assert.Equal(t, int(24*time.Minute/time.Second), projectRuntime.CalculationComponents[0].InducedSeconds)
+		assert.Equal(t, "job_a1", projectRuntime.CalculationComponents[1].Job)
+		assert.Equal(t, int(19*time.Minute/time.Second), projectRuntime.CalculationComponents[1].InducedSeconds)
+		assert.Empty(t, projectRuntime.SkippedNoBaseline)
 	})
 
 	t.Run("project evidence lists the jobs skipped for having no baseline", func(t *testing.T) {
@@ -318,12 +320,12 @@ func TestPublisher_Evaluate(t *testing.T) {
 
 		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
 		assert.Len(t, matched, 1, "no job crosses the threshold alone; the project sum does")
+		assert.Equal(t, int(40*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds) // project total
 		evidence := matched[0].Reason.Evidence
 		assert.NotNil(t, evidence)
-		assert.Equal(t, int(40*time.Minute/time.Second), evidence.TotalSeconds)
-		assert.Equal(t, 2, evidence.ComponentsTotal)
-		assert.Len(t, evidence.Components, 2)
-		assert.Equal(t, []string{"p_a/job_a2"}, evidence.SkippedNoBaseline,
+		assert.Equal(t, 2, evidence.Runtime.CalculationComponentsTotal)
+		assert.Len(t, evidence.Runtime.CalculationComponents, 2)
+		assert.Equal(t, []string{"p_a/job_a2"}, evidence.Runtime.SkippedNoBaseline,
 			"the no-baseline job is reported as skipped, not counted at full length")
 	})
 
@@ -349,13 +351,12 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, scheduler.DelayScopeProject, matched[0].Reason.DelayScope)
 		evidence := matched[0].Reason.Evidence
 		assert.NotNil(t, evidence)
-		assert.Equal(t, int(125*time.Minute/time.Second), evidence.TotalSeconds)
-		assert.Equal(t, 25, evidence.ComponentsTotal)
-		assert.Len(t, evidence.Components, scheduler.MaxEvidenceComponents)
+		assert.Equal(t, 25, evidence.Runtime.CalculationComponentsTotal)
+		assert.Len(t, evidence.Runtime.CalculationComponents, scheduler.MaxEvidenceComponents)
 		// deterministic order: largest first, ties by job name
-		assert.Equal(t, "job_u01", evidence.Components[0].Job)
-		assert.Equal(t, "job_u20", evidence.Components[len(evidence.Components)-1].Job)
-		for _, component := range evidence.Components {
+		assert.Equal(t, "job_u01", evidence.Runtime.CalculationComponents[0].Job)
+		assert.Equal(t, "job_u20", evidence.Runtime.CalculationComponents[len(evidence.Runtime.CalculationComponents)-1].Job)
+		for _, component := range evidence.Runtime.CalculationComponents {
 			assert.Equal(t, int(5*time.Minute/time.Second), component.InducedSeconds)
 		}
 	})

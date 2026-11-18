@@ -232,11 +232,12 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameA, result.JobName)
 		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
 		assert.EqualValues(t, result.Window, &yestWindowCfg)
-		assert.Equal(t, len(result.JobRuns), 1)
-		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameA, result.JobRuns[jobNameA].JobName)
-		assert.Equal(t, 1, result.JobRuns[jobNameA].TaskAttempts)
-		assert.Equal(t, 1, result.JobRuns[jobNameA].HookAttempts)
+		targetRun := result.TargetRun()
+		assert.NotNil(t, targetRun)
+		assert.Equal(t, scheduledTime, targetRun.ScheduledAt)
+		assert.Equal(t, jobNameA, targetRun.JobName)
+		assert.Equal(t, 1, targetRun.TaskAttempts)
+		assert.Equal(t, 1, targetRun.HookAttempts)
 
 		// assert job B results
 		assert.Len(t, result.Upstreams, 1)
@@ -244,12 +245,14 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameB, upstreamB.JobName)
 		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
-		assert.Len(t, upstreamB.JobRuns, 1)
+		assert.Len(t, upstreamB.RunsByDownstream, 1)
 		expectedBSchedule := jobBExpectedSchedules[0]
-		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
-		assert.Equal(t, 2, upstreamB.JobRuns[jobNameA].TaskAttempts)
-		assert.Equal(t, 1, upstreamB.JobRuns[jobNameA].HookAttempts)
+		runB := upstreamB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduledTime))
+		assert.NotNil(t, runB)
+		assert.Equal(t, expectedBSchedule, runB.ScheduledAt)
+		assert.Equal(t, jobNameB, runB.JobName)
+		assert.Equal(t, 2, runB.TaskAttempts)
+		assert.Equal(t, 1, runB.HookAttempts)
 
 		// assert job C results
 		assert.Len(t, upstreamB.Upstreams, 1)
@@ -257,13 +260,15 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameC, upstreamC.JobName)
 		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
-		assert.Len(t, upstreamC.JobRuns, 1)
+		assert.Len(t, upstreamC.RunsByDownstream, 1)
 		expectedCSchedule := selectedCSchedule
-		// job-c's immediate downstream is job-b, so its run is keyed by job-b, not the tree root
-		assert.Equal(t, expectedCSchedule, upstreamC.JobRuns[jobNameB].ScheduledAt)
-		assert.Equal(t, jobNameC, upstreamC.JobRuns[jobNameB].JobName)
-		assert.Equal(t, 1, upstreamC.JobRuns[jobNameB].TaskAttempts)
-		assert.Equal(t, 3, upstreamC.JobRuns[jobNameB].HookAttempts)
+		// job-c's run is keyed by the downstream RUN (job-b at its schedule), not the tree root
+		runC := upstreamC.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, expectedBSchedule))
+		assert.NotNil(t, runC)
+		assert.Equal(t, expectedCSchedule, runC.ScheduledAt)
+		assert.Equal(t, jobNameC, runC.JobName)
+		assert.Equal(t, 1, runC.TaskAttempts)
+		assert.Equal(t, 3, runC.HookAttempts)
 
 		assert.Empty(t, upstreamC.Upstreams)
 
@@ -616,12 +621,13 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameA, result.JobName)
 		assert.EqualValues(t, result.ScheduleInterval, jobAWithDetails.ScheduleInterval)
 		assert.EqualValues(t, result.Window, &yestWindowCfg)
-		assert.Equal(t, len(result.JobRuns), 1)
-		assert.Equal(t, scheduledTime, result.JobRuns[jobNameA].ScheduledAt)
-		assert.Nil(t, result.JobRuns[jobNameA].JobStartTime)
-		assert.Nil(t, result.JobRuns[jobNameA].JobEndTime)
-		assert.Nil(t, result.JobRuns[jobNameA].TaskStartTime)
-		assert.Nil(t, result.JobRuns[jobNameA].TaskEndTime)
+		targetRun := result.TargetRun()
+		assert.NotNil(t, targetRun)
+		assert.Equal(t, scheduledTime, targetRun.ScheduledAt)
+		assert.Nil(t, targetRun.JobStartTime)
+		assert.Nil(t, targetRun.JobEndTime)
+		assert.Nil(t, targetRun.TaskStartTime)
+		assert.Nil(t, targetRun.TaskEndTime)
 
 		// assert job B results
 		assert.Len(t, result.Upstreams, 1)
@@ -629,10 +635,12 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameB, upstreamB.JobName)
 		assert.EqualValues(t, upstreamB.ScheduleInterval, jobBWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamB.Window, &multidayWindowCfg)
-		assert.Len(t, upstreamB.JobRuns, 1)
+		assert.Len(t, upstreamB.RunsByDownstream, 1)
 		expectedBSchedule := jobBExpectedSchedules[0]
-		assert.Equal(t, expectedBSchedule, upstreamB.JobRuns[jobNameA].ScheduledAt)
-		assert.Equal(t, jobNameB, upstreamB.JobRuns[jobNameA].JobName)
+		runB := upstreamB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameA, scheduledTime))
+		assert.NotNil(t, runB)
+		assert.Equal(t, expectedBSchedule, runB.ScheduledAt)
+		assert.Equal(t, jobNameB, runB.JobName)
 
 		// assert job C results: should be empty
 		assert.Len(t, upstreamB.Upstreams, 1)
@@ -640,7 +648,7 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		assert.Equal(t, jobNameC, upstreamC.JobName)
 		assert.EqualValues(t, upstreamC.ScheduleInterval, jobCWithDetails.ScheduleInterval)
 		assert.EqualValues(t, upstreamC.Window, &yestWindowCfg)
-		assert.Len(t, upstreamC.JobRuns, 0)
+		assert.Len(t, upstreamC.RunsByDownstream, 0)
 		assert.Empty(t, upstreamC.Upstreams)
 
 		upstreamRepo.AssertExpectations(t)
@@ -741,12 +749,17 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		upstreamDViaC := upstreamC.Upstreams[0]
 		assert.Same(t, upstreamDViaB, upstreamDViaC)
 
-		// D must carry both runs, keyed by its immediate downstream, not just the last one processed
-		assert.Len(t, upstreamDViaB.JobRuns, 2)
-		assert.Equal(t, scheduleDViaB, upstreamDViaB.JobRuns[jobNameB].ScheduledAt)
-		assert.Equal(t, scheduleDViaC, upstreamDViaB.JobRuns[jobNameC].ScheduledAt)
-		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].TaskAttempts)
-		assert.Equal(t, 0, upstreamDViaB.JobRuns[jobNameB].HookAttempts)
+		// D must carry both runs, keyed by its immediate downstream run, not just the last
+		// one processed
+		assert.Len(t, upstreamDViaB.RunsByDownstream, 2)
+		runDViaB := upstreamDViaB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameB, scheduleB))
+		assert.NotNil(t, runDViaB)
+		assert.Equal(t, scheduleDViaB, runDViaB.ScheduledAt)
+		runDViaC := upstreamDViaB.GetRunForDownstream(scheduler.NewJobRunKey(jobNameC, scheduleC))
+		assert.NotNil(t, runDViaC)
+		assert.Equal(t, scheduleDViaC, runDViaC.ScheduledAt)
+		assert.Equal(t, 0, runDViaB.TaskAttempts)
+		assert.Equal(t, 0, runDViaB.HookAttempts)
 
 		upstreamRepo.AssertExpectations(t)
 		jobRepo.AssertExpectations(t)
@@ -859,8 +872,9 @@ func TestLineageResolver_SameJobReachedAtTwoRuns(t *testing.T) {
 			assert.Equal(t, day(20), upstreamA.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(21))].ScheduledAt)
 			assert.Equal(t, day(15), upstreamA.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(16))].ScheduledAt)
 
-			// the job-level legacy view keeps the entry implied by the latest downstream run
-			assert.Equal(t, day(20), upstreamA.JobRuns[scheduler.JobName("job-b")].ScheduledAt)
+			// the shared A node keeps both runs, one per downstream run
+			assert.Equal(t, day(20), upstreamA.GetRunForDownstream(scheduler.NewJobRunKey("job-b", day(21))).ScheduledAt)
+			assert.Equal(t, day(15), upstreamA.GetRunForDownstream(scheduler.NewJobRunKey("job-b", day(16))).ScheduledAt)
 		})
 	}
 }

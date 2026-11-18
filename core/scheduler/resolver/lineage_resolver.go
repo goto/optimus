@@ -160,9 +160,7 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 
 	result[jobName] = &scheduler.JobLineageSummary{
 		JobName: jobName,
-		JobRuns: make(map[scheduler.JobName]*scheduler.JobRunSummary),
 	}
-
 	if job, exists := lineageData.JobsByName[jobName]; exists && job.IsEnabled {
 		result[jobName].Tenant = job.Tenant
 		result[jobName].IsEnabled = job.IsEnabled
@@ -196,7 +194,6 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 		lineage.RunsByDownstream = make(map[scheduler.JobRunKey]*scheduler.JobRunSummary)
 	}
 	lineage.RunsByDownstream[scheduler.NewJobRunKey(lineage.JobName, scheduledAt)] = rootRun
-	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{lineage.JobName: rootRun}
 
 	// calculate upstream job runs within the valid lineage interval
 	referenceTime := scheduledAt.Add(-time.Duration(validLineageIntervalInHours) * time.Hour)
@@ -392,7 +389,6 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		runsByDownstream[downstreamKey] = run
 	}
 	node.RunsByDownstream = runsByDownstream
-	node.RefreshJobRuns()
 
 	return node
 }

@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -173,6 +174,12 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 	for _, upstreamName := range lineageData.UpstreamsByJob[jobName] {
 		result[jobName].Upstreams = append(result[jobName].Upstreams, r.buildLineageTree(upstreamName, lineageData, result, depth+1))
 	}
+	// the upstream repository does not guarantee row order (no ORDER BY); sort so the
+	// Upstreams slice - which the walk traverses and rootcause tie-breaks read - has a
+	// defined order independent of the database
+	sort.Slice(result[jobName].Upstreams, func(i, k int) bool {
+		return result[jobName].Upstreams[i].JobName < result[jobName].Upstreams[k].JobName
+	})
 	return result[jobName]
 }
 

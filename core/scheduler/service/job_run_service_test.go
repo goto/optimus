@@ -2685,7 +2685,9 @@ func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, tenant tena
 	return args.Get(0).(*scheduler.JobRun), args.Error(1)
 }
 
-func (m *mockJobRunRepository) Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, startTime time.Time, window interval.Interval, slaDefinitionInSec int64) error {
+func (m *mockJobRunRepository) Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName,
+	scheduledAt, startTime time.Time, window interval.Interval, slaDefinitionInSec int64,
+) error {
 	args := m.Called(ctx, tenant, name, scheduledAt, startTime, window, slaDefinitionInSec)
 	return args.Error(0)
 }

@@ -73,7 +73,8 @@ type JobRunRepository interface {
 	GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
 	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
-	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, startTime time.Time, interval interval.Interval, slaDefinitionInSec int64) error
+	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time,
+		startTime time.Time, interval interval.Interval, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
@@ -781,7 +782,7 @@ func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteri
 // startTime is the callback's event time -- the moment Airflow said the run
 // started -- not the Optimus server clock, so start_time stays on the same
 // clock as every other timestamp the delay metrics compare it against.
-func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, startTime time.Time) error {
+func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt, startTime time.Time) error {
 	job, err := s.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
 		s.l.Error("error getting job details for job [%s]: %s", jobName, err)
@@ -839,7 +840,7 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 	return nil
 }
 
-func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, startTime time.Time) (*scheduler.JobRun, error) {
+func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt, startTime time.Time) (*scheduler.JobRun, error) {
 	var jobRun *scheduler.JobRun
 	jobRun, err := s.repo.GetByScheduledAt(ctx, tenant, jobName, scheduledAt)
 	if err != nil {

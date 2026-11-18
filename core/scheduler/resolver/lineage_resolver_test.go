@@ -13,6 +13,7 @@ import (
 	"github.com/goto/optimus/core/scheduler"
 	"github.com/goto/optimus/core/scheduler/resolver"
 	"github.com/goto/optimus/core/tenant"
+	"github.com/goto/optimus/internal/lib/cron"
 	"github.com/goto/optimus/internal/lib/window"
 )
 
@@ -752,6 +753,116 @@ func TestLineageResolver_BuildLineage(t *testing.T) {
 		jobRunService.AssertExpectations(t)
 		projectGetter.AssertExpectations(t)
 	})
+}
+
+// cronJobRunService resolves "the latest upstream schedule at or before the downstream
+// schedule" the way the real JobRunService does, without needing a window-config lookup.
+type cronJobRunService struct{ MockJobRunService }
+
+func (*cronJobRunService) GetExpectedRunSchedules(
+	_ context.Context, _ *tenant.Project, _ string, _ window.Config,
+	upstreamSchedule string, referenceTime time.Time,
+) ([]time.Time, error) {
+	spec, err := cron.ParseCronSchedule(upstreamSchedule)
+	if err != nil {
+		return nil, err
+	}
+	return []time.Time{spec.Prev(referenceTime.Add(time.Second))}, nil
+}
+
+func (*cronJobRunService) GetJobRunsByIdentifiers(
+	context.Context, []scheduler.JobRunIdentifier,
+) ([]*scheduler.JobRunSummary, error) {
+	return []*scheduler.JobRunSummary{}, nil
+}
+
+func TestLineageResolver_SameJobReachedAtTwoRuns(t *testing.T) {
+	// topology: T -> {B, M}, M -> B, B -> A. B runs twice a day (16, 21) and A runs at
+	// (15, 20). T@22 reaches B@21 directly while M@17 reaches B@16, so B is reached at two
+	// runs and each must keep its own upstream run: B@21 -> A@20, B@16 -> A@15.
+	// Previously both paths shared one A run keyed only by B's job name and the last
+	// traversed path won - the "sensor sometimes used the previous hourly run" bug.
+	ctx := context.Background()
+	logger := log.NewNoop()
+
+	project, _ := tenant.NewProject("test-proj", map[string]string{
+		tenant.ProjectSchedulerHost:  "host",
+		tenant.ProjectStoragePathKey: "gs://location",
+	}, map[string]string{})
+	namespace, _ := tenant.NewNamespace("test-ns", project.Name(), map[string]string{}, map[string]string{})
+	jobTenant, _ := tenant.NewTenant(project.Name().String(), namespace.Name().String())
+	windowConfig, _ := window.NewPresetConfig("yesterday")
+
+	mkJob := func(name, cronExpr string) *scheduler.JobSummary {
+		return &scheduler.JobSummary{
+			JobName:          scheduler.JobName(name),
+			IsEnabled:        true,
+			Tenant:           jobTenant,
+			Window:           windowConfig,
+			SLA:              scheduler.SLAConfig{},
+			ScheduleInterval: cronExpr,
+		}
+	}
+	jobsByName := map[scheduler.JobName]*scheduler.JobSummary{
+		"job-t": mkJob("job-t", "0 22 * * *"),
+		"job-m": mkJob("job-m", "0 17 * * *"),
+		"job-b": mkJob("job-b", "0 16,21 * * *"),
+		"job-a": mkJob("job-a", "0 15,20 * * *"),
+	}
+
+	day := func(hour int) time.Time { return time.Date(2023, 1, 1, hour, 0, 0, 0, time.UTC) }
+
+	// the upstream repository does not guarantee row order, so either order can occur;
+	// both must produce the same lineage
+	for name, tUpstreams := range map[string][]scheduler.JobName{
+		"b before m": {"job-b", "job-m"},
+		"m before b": {"job-m", "job-b"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			upstreamsMap := map[scheduler.JobName][]scheduler.JobName{
+				"job-t": tUpstreams,
+				"job-m": {"job-b"},
+				"job-b": {"job-a"},
+			}
+
+			upstreamRepo := new(MockJobUpstreamRepository)
+			upstreamRepo.On("GetAllResolvedUpstreams", ctx).Return(upstreamsMap, nil)
+			jobRepo := new(MockJobRepository)
+			jobRepo.On("GetSummaryByNames", ctx, mock.Anything).Return(jobsByName, nil)
+			projectGetter := new(MockProjectGetter)
+			projectGetter.On("Get", ctx, project.Name()).Return(project, nil)
+
+			resolver := resolver.NewLineageResolver(upstreamRepo, jobRepo, &cronJobRunService{}, projectGetter, logger)
+			jobSchedule := &scheduler.JobSchedule{JobName: "job-t", ScheduledAt: day(22)}
+			resultMap, err := resolver.BuildLineage(ctx, []*scheduler.JobSchedule{jobSchedule}, 24)
+			assert.NoError(t, err)
+			target := resultMap[jobSchedule]
+
+			// the walk must follow one edge per downstream run
+			walk := target.GetLineageNodes(scheduler.LineageWalkOptions{})
+			assert.Equal(t, 6, walk.TotalNodes)
+			assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-a", day(20))},
+				walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(21))])
+			assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-a", day(15))},
+				walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(16))])
+
+			// the shared nodes keep one run per downstream run
+			upstreamB := target.Upstreams[0]
+			assert.Equal(t, scheduler.JobName("job-b"), upstreamB.JobName)
+			assert.Len(t, upstreamB.RunsByDownstream, 2)
+			assert.Equal(t, day(21), upstreamB.RunsByDownstream[scheduler.NewJobRunKey("job-t", day(22))].ScheduledAt)
+			assert.Equal(t, day(16), upstreamB.RunsByDownstream[scheduler.NewJobRunKey("job-m", day(17))].ScheduledAt)
+
+			upstreamA := upstreamB.Upstreams[0]
+			assert.Equal(t, scheduler.JobName("job-a"), upstreamA.JobName)
+			assert.Len(t, upstreamA.RunsByDownstream, 2)
+			assert.Equal(t, day(20), upstreamA.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(21))].ScheduledAt)
+			assert.Equal(t, day(15), upstreamA.RunsByDownstream[scheduler.NewJobRunKey("job-b", day(16))].ScheduledAt)
+
+			// the job-level legacy view keeps the entry implied by the latest downstream run
+			assert.Equal(t, day(20), upstreamA.JobRuns[scheduler.JobName("job-b")].ScheduledAt)
+		})
+	}
 }
 
 type MockJobUpstreamRepository struct {

@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -173,29 +174,33 @@ func (r *LineageResolver) buildLineageTree(jobName scheduler.JobName, lineageDat
 	for _, upstreamName := range lineageData.UpstreamsByJob[jobName] {
 		result[jobName].Upstreams = append(result[jobName].Upstreams, r.buildLineageTree(upstreamName, lineageData, result, depth+1))
 	}
+	// the upstream repository does not guarantee row order (no ORDER BY); sort so the
+	// Upstreams slice - which the walk traverses and rootcause tie-breaks read - has a
+	// defined order independent of the database
+	sort.Slice(result[jobName].Upstreams, func(i, k int) bool {
+		return result[jobName].Upstreams[i].JobName < result[jobName].Upstreams[k].JobName
+	})
 	return result[jobName]
-}
-
-type visitKey struct {
-	jobName     scheduler.JobName
-	scheduledAt time.Time
 }
 
 func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, scheduledAt time.Time, lineageData *LineageData, validLineageIntervalInHours int) (*scheduler.JobLineageSummary, error) {
 	allJobRunsMap := make(map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary)
 	// initialize first job run in the lineage
 	baseSLATime := scheduledAt.Add(lineage.SLA.Duration)
-	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{
-		lineage.JobName: {
-			JobName:     lineage.JobName,
-			ScheduledAt: scheduledAt,
-			SLATime:     &baseSLATime,
-		},
+	rootRun := &scheduler.JobRunSummary{
+		JobName:     lineage.JobName,
+		ScheduledAt: scheduledAt,
+		SLATime:     &baseSLATime,
 	}
+	if lineage.RunsByDownstream == nil {
+		lineage.RunsByDownstream = make(map[scheduler.JobRunKey]*scheduler.JobRunSummary)
+	}
+	lineage.RunsByDownstream[scheduler.NewJobRunKey(lineage.JobName, scheduledAt)] = rootRun
+	lineage.JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{lineage.JobName: rootRun}
 
 	// calculate upstream job runs within the valid lineage interval
 	referenceTime := scheduledAt.Add(-time.Duration(validLineageIntervalInHours) * time.Hour)
-	err := r.calculateAllUpstreamRuns(ctx, lineage, lineageData, allJobRunsMap, make(map[visitKey]bool), referenceTime)
+	err := r.calculateAllUpstreamRuns(ctx, lineage, rootRun, lineageData, allJobRunsMap, referenceTime)
 	if err != nil {
 		return nil, err
 	}
@@ -208,44 +213,48 @@ func (r *LineageResolver) getAllUpstreamRuns(ctx context.Context, lineage *sched
 	return r.populateLineageWithJobRuns(lineage, jobRunDetails, make(map[scheduler.JobName]*scheduler.JobLineageSummary)), nil
 }
 
-// calculateAllUpstreamRuns walks the lineage tree and, for each job, computes the schedule of
-// its upstreams. A job reached via multiple downstream paths (a diamond) is keyed in JobRuns by
-// its immediate downstream job name, not by the traversal's ultimate root - this lets a shared
-// upstream carry a distinct run per path instead of the last-visited path silently overwriting
-// the others.
-func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, visited map[visitKey]bool, referenceTime time.Time) error {
-	if len(lineage.JobRuns) == 0 {
-		return nil
+// calculateAllUpstreamRuns walks the lineage from the root run and, for every run, computes
+// the schedule each of its upstreams must have. Both the traversal frontier and the runs
+// written to RunsByDownstream are keyed by the downstream run - (downstream job name,
+// scheduledAt) - so a job reached by several downstream runs carries one upstream run per
+// path instead of the last-visited path silently overwriting the others.
+func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage *scheduler.JobLineageSummary, rootRun *scheduler.JobRunSummary, lineageData *LineageData, allJobRunsMap map[scheduler.JobName]map[time.Time]*scheduler.JobRunSummary, referenceTime time.Time) error {
+	type pendingRun struct {
+		lineage *scheduler.JobLineageSummary
+		run     *scheduler.JobRunSummary
 	}
 
-	currentJob := lineageData.JobsByName[lineage.JobName]
-	if currentJob == nil || !currentJob.IsEnabled {
-		return nil
-	}
+	// a worklist of runs rather than a recursion over a mutated map: each entry is processed
+	// exactly once, in a deterministic order
+	processed := make(map[scheduler.JobRunKey]bool)
+	queue := []pendingRun{{lineage: lineage, run: rootRun}}
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
 
-	if _, exists := allJobRunsMap[lineage.JobName]; !exists {
-		allJobRunsMap[lineage.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
-	}
-
-	for _, jobRun := range lineage.JobRuns {
-		visitedKey := visitKey{
-			jobName:     lineage.JobName,
-			scheduledAt: jobRun.ScheduledAt,
-		}
-		if _, ok := visited[visitedKey]; ok {
+		currentJob := lineageData.JobsByName[item.lineage.JobName]
+		if currentJob == nil || !currentJob.IsEnabled {
 			continue
 		}
 
-		visited[visitedKey] = true
-		allJobRunsMap[lineage.JobName][jobRun.ScheduledAt.UTC()] = copyJobRun(jobRun)
+		nodeKey := scheduler.NewJobRunKey(item.lineage.JobName, item.run.ScheduledAt)
+		if processed[nodeKey] {
+			continue
+		}
+		processed[nodeKey] = true
 
-		for _, upstream := range lineage.Upstreams {
+		if _, exists := allJobRunsMap[item.lineage.JobName]; !exists {
+			allJobRunsMap[item.lineage.JobName] = make(map[time.Time]*scheduler.JobRunSummary)
+		}
+		allJobRunsMap[item.lineage.JobName][item.run.ScheduledAt.UTC()] = copyJobRun(item.run)
+
+		for _, upstream := range item.lineage.Upstreams {
 			upstreamJob := lineageData.JobsByName[upstream.JobName]
 			if upstreamJob == nil || !upstreamJob.IsEnabled {
 				continue
 			}
 
-			upstreamSchedule, err := r.getLatestUpstreamRun(ctx, currentJob, upstreamJob, jobRun.ScheduledAt, lineageData.ProjectsByName)
+			upstreamSchedule, err := r.getLatestUpstreamRun(ctx, currentJob, upstreamJob, item.run.ScheduledAt, lineageData.ProjectsByName)
 			if err != nil {
 				return err
 			}
@@ -266,16 +275,14 @@ func (r *LineageResolver) calculateAllUpstreamRuns(ctx context.Context, lineage 
 					SLATime:     &baseSLATime,
 				}
 			}
+			upstreamRun := allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
 
-			if upstream.JobRuns == nil {
-				upstream.JobRuns = make(map[scheduler.JobName]*scheduler.JobRunSummary)
+			if upstream.RunsByDownstream == nil {
+				upstream.RunsByDownstream = make(map[scheduler.JobRunKey]*scheduler.JobRunSummary)
 			}
-			upstream.JobRuns[lineage.JobName] = allJobRunsMap[upstream.JobName][upstreamSchedule.UTC()]
+			upstream.RunsByDownstream[nodeKey] = upstreamRun
 
-			err = r.calculateAllUpstreamRuns(ctx, upstream, lineageData, allJobRunsMap, visited, referenceTime)
-			if err != nil {
-				return err
-			}
+			queue = append(queue, pendingRun{lineage: upstream, run: upstreamRun})
 		}
 	}
 
@@ -367,24 +374,27 @@ func (r *LineageResolver) populateLineageWithJobRuns(lineage *scheduler.JobLinea
 		SLA:              lineage.SLA,
 		Upstreams:        make([]*scheduler.JobLineageSummary, len(lineage.Upstreams)),
 	}
-
-	if jobRuns, exists := jobRunDetails[lineage.JobName]; exists {
-		// only fetch job runs that are necessary in the lineage
-		result[lineage.JobName].JobRuns = map[scheduler.JobName]*scheduler.JobRunSummary{}
-		for targetJobName, jobRun := range lineage.JobRuns {
-			if jobRun, exists := jobRuns[jobRun.ScheduledAt.UTC()]; exists {
-				result[lineage.JobName].JobRuns[targetJobName] = jobRun
-			}
-		}
-	} else {
-		result[lineage.JobName].JobRuns = lineage.JobRuns
-	}
+	node := result[lineage.JobName]
 
 	for i, upstream := range lineage.Upstreams {
-		result[lineage.JobName].Upstreams[i] = r.populateLineageWithJobRuns(upstream, jobRunDetails, result)
+		node.Upstreams[i] = r.populateLineageWithJobRuns(upstream, jobRunDetails, result)
 	}
 
-	return result[lineage.JobName]
+	// only fetch job runs that are necessary in the lineage
+	details, hasDetails := jobRunDetails[lineage.JobName]
+	runsByDownstream := make(map[scheduler.JobRunKey]*scheduler.JobRunSummary, len(lineage.RunsByDownstream))
+	for downstreamKey, run := range lineage.RunsByDownstream {
+		if hasDetails {
+			if detail, exists := details[run.ScheduledAt.UTC()]; exists {
+				run = detail
+			}
+		}
+		runsByDownstream[downstreamKey] = run
+	}
+	node.RunsByDownstream = runsByDownstream
+	node.RefreshJobRuns()
+
+	return node
 }
 
 func copyJobRun(source *scheduler.JobRunSummary) *scheduler.JobRunSummary {

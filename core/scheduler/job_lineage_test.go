@@ -1150,3 +1150,123 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		assert.Empty(t, sharedRun.JobStatus)
 	})
 }
+
+func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
+	// topology: T -> {B, M}, M -> B, B -> A. B runs twice a day (16, 21) and A at (15, 20),
+	// so B is reached at two runs and each keeps its own upstream run: B@21 -> A@20,
+	// B@16 -> A@15.
+	projName := tenant.ProjectName("proj")
+	namespaceName := tenant.ProjectName("ns1")
+	tnnt, _ := tenant.NewTenant(projName.String(), namespaceName.String())
+
+	day := func(hour int) time.Time { return time.Date(2023, 1, 1, hour, 0, 0, 0, time.UTC) }
+	finishedRun := func(jobName string, scheduledAt, endTime time.Time) *scheduler.JobRunSummary {
+		return &scheduler.JobRunSummary{
+			JobName:       scheduler.JobName(jobName),
+			ScheduledAt:   scheduledAt,
+			JobStartTime:  &scheduledAt,
+			JobEndTime:    &endTime,
+			TaskStartTime: &scheduledAt,
+			TaskEndTime:   &endTime,
+			HookEndTime:   &endTime,
+		}
+	}
+
+	runT := finishedRun("job-t", day(22), day(22).Add(30*time.Minute))
+	runM := finishedRun("job-m", day(17), day(17).Add(40*time.Minute))
+	runB21 := finishedRun("job-b", day(21), day(21).Add(50*time.Minute))
+	runB16 := finishedRun("job-b", day(16), day(16).Add(40*time.Minute))
+	runA20 := finishedRun("job-a", day(20), day(20).Add(30*time.Minute))
+	runA15 := finishedRun("job-a", day(15), day(15).Add(30*time.Minute))
+
+	nodeA := &scheduler.JobLineageSummary{
+		JobName: "job-a",
+		Tenant:  tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-b", day(21)): runA20,
+			scheduler.NewJobRunKey("job-b", day(16)): runA15,
+		},
+	}
+	nodeB := &scheduler.JobLineageSummary{
+		JobName: "job-b",
+		Tenant:  tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", day(22)): runB21,
+			scheduler.NewJobRunKey("job-m", day(17)): runB16,
+		},
+		Upstreams: []*scheduler.JobLineageSummary{nodeA},
+	}
+	nodeM := &scheduler.JobLineageSummary{
+		JobName:   "job-m",
+		Tenant:    tnnt,
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runM},
+		Upstreams: []*scheduler.JobLineageSummary{nodeB},
+	}
+	nodeT := &scheduler.JobLineageSummary{
+		JobName:   "job-t",
+		Tenant:    tnnt,
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+		Upstreams: []*scheduler.JobLineageSummary{nodeB, nodeM},
+	}
+
+	t.Run("the walk follows one edge per downstream run", func(t *testing.T) {
+		walk := nodeT.GetLineageNodes(scheduler.LineageWalkOptions{})
+
+		assert.Equal(t, 6, walk.TotalNodes)
+		assert.Equal(t, []scheduler.JobRunKey{
+			scheduler.NewJobRunKey("job-b", day(21)),
+			scheduler.NewJobRunKey("job-m", day(17)),
+		}, walk.UpstreamsByKey[scheduler.NewJobRunKey("job-t", day(22))])
+		assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-a", day(20))},
+			walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(21))])
+		assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-b", day(16))},
+			walk.UpstreamsByKey[scheduler.NewJobRunKey("job-m", day(17))])
+		assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-a", day(15))},
+			walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(16))])
+	})
+
+	t.Run("ranking uses the run carried for the specific downstream run", func(t *testing.T) {
+		// with only the latest-finishing upstream followed, T@22 must pick B@21 (ends 21:50,
+		// later than M@17) and never reach the B@16 path
+		walk := nodeT.GetLineageNodes(scheduler.LineageWalkOptions{TopUpstreamsPerJob: 1, MaxDepth: 5})
+
+		assert.Equal(t, 3, walk.TotalNodes)
+		assert.Equal(t, []scheduler.JobRunKey{scheduler.NewJobRunKey("job-a", day(20))},
+			walk.UpstreamsByKey[scheduler.NewJobRunKey("job-b", day(21))])
+	})
+
+	t.Run("the legacy job-level view keeps the entry implied by the latest downstream run", func(t *testing.T) {
+		nodeA.RefreshJobRuns()
+		nodeB.RefreshJobRuns()
+
+		assert.Equal(t, runA20, nodeA.JobRuns[scheduler.JobName("job-b")],
+			"B@21 is the latest downstream run reaching A, so its A@20 wins")
+		assert.Equal(t, runB21, nodeB.JobRuns[scheduler.JobName("job-t")])
+		assert.Equal(t, runB16, nodeB.JobRuns[scheduler.JobName("job-m")],
+			"reached by two different downstream jobs, both entries survive")
+
+		// hand-built fixtures without RunsByDownstream fall back to the job-level view
+		legacy := &scheduler.JobLineageSummary{
+			JobName: "job-x",
+			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-y": runA15},
+		}
+		assert.Equal(t, runA15, legacy.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(16))))
+	})
+
+	t.Run("clipping covers runs the job-level view collapses away", func(t *testing.T) {
+		referenceTime := day(16).Add(30 * time.Minute)
+		lateRun := finishedRun("job-a", day(20), day(20).Add(30*time.Minute))
+		lateRun.JobStatus = "success"
+		clipping := &scheduler.JobLineageSummary{
+			JobName: "job-a",
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-b", day(21)): lateRun,
+				scheduler.NewJobRunKey("job-b", day(16)): finishedRun("job-a", day(15), day(15).Add(30*time.Minute)),
+			},
+		}
+
+		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-a": clipping}, referenceTime)
+
+		assert.Empty(t, lateRun.JobStatus, "A@20 is after the reference time and must be clipped")
+	})
+}

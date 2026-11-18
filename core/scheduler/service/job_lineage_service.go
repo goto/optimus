@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/goto/salt/log"
@@ -65,6 +66,14 @@ func (j *JobLineageService) generateLineageExecutionSummary(ctx context.Context,
 		jobRunLineage := newDownstreamLineage.GenerateLineageExecutionSummary(walkOpts)
 		result = append(result, jobRunLineage)
 	}
+
+	// the source is a map, so the response order would otherwise change between requests
+	sort.Slice(result, func(i, k int) bool {
+		if result[i].JobName != result[k].JobName {
+			return result[i].JobName < result[k].JobName
+		}
+		return result[i].ScheduledAt.Before(result[k].ScheduledAt)
+	})
 
 	if err := j.enrichWithHistoricalDurations(ctx, result); err != nil {
 		j.l.Error("failed to enrich job run lineage with historical durations", "error", err)

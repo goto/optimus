@@ -79,7 +79,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)
@@ -111,7 +111,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)
@@ -155,7 +155,7 @@ func BenchmarkOperatorRunRepository(b *testing.B) {
 
 		scheduledAt := time.Now()
 
-		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, intr, int64(time.Second))
+		err = schedulerJobRunRepo.Create(ctx, tnnt, jobNameForRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, err)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForRun, scheduledAt)

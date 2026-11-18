@@ -226,7 +226,7 @@ func TestJobRunService(t *testing.T) {
 
 				jobRunRepo := new(mockJobRunRepository)
 				jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(nil, errors.NotFound(scheduler.EntityJobRun, "job run not found in db for given schedule date")).Once()
-				jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, slaDefinitionInSec).Return(nil)
+				jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, mock.Anything, slaDefinitionInSec).Return(nil)
 				jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(jobRun, nil).Once()
 				jobRunRepo.On("Update", ctx, jobRun.ID, event.EventTime, scheduler.StateSuccess).Return(nil)
 				jobRunRepo.On("UpdateMonitoring", ctx, jobRun.ID, monitoring).Return(nil)
@@ -353,7 +353,7 @@ func TestJobRunService(t *testing.T) {
 				t.Run("scenario, return error when, unable to create job run", func(t *testing.T) {
 					jobRunRepo := new(mockJobRunRepository)
 					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(nil, errors.NotFound(scheduler.EntityJobRun, "job run not found")).Once()
-					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, slaDefinitionInSec).Return(fmt.Errorf("unable to create job run")).Once()
+					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, mock.Anything, slaDefinitionInSec).Return(fmt.Errorf("unable to create job run")).Once()
 					defer jobRunRepo.AssertExpectations(t)
 
 					jobRepo := new(JobRepository)
@@ -374,7 +374,7 @@ func TestJobRunService(t *testing.T) {
 				t.Run("scenario, return error when, despite successful creation getByScheduledAt still fails", func(t *testing.T) {
 					jobRunRepo := new(mockJobRunRepository)
 					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(nil, errors.NotFound(scheduler.EntityJobRun, "job run not found"))
-					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, slaDefinitionInSec).Return(nil)
+					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, mock.Anything, slaDefinitionInSec).Return(nil)
 					defer jobRunRepo.AssertExpectations(t)
 
 					projectGetter := new(mockProjectGetter)
@@ -395,7 +395,8 @@ func TestJobRunService(t *testing.T) {
 				t.Run("scenario should successfully register new job run row", func(t *testing.T) {
 					jobRunRepo := new(mockJobRunRepository)
 					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(nil, errors.NotFound(scheduler.EntityJobRun, "job run not found")).Once()
-					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, mock.Anything, slaDefinitionInSec).Return(nil).Once()
+					// the run's start_time must carry the callback's event time
+					jobRunRepo.On("Create", ctx, tnnt, jobName, scheduledAtTimeStamp, eventTime, mock.Anything, slaDefinitionInSec).Return(nil).Once()
 					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, jobName, scheduledAtTimeStamp).Return(&jobRun, nil).Once()
 					jobRunRepo.On("Update", ctx, jobRun.ID, endTime, scheduler.StateSuccess).Return(nil)
 					jobRunRepo.On("UpdateMonitoring", ctx, jobRun.ID, monitoring).Return(nil)
@@ -2621,8 +2622,8 @@ func (m *mockJobRunRepository) GetByScheduledAt(ctx context.Context, tenant tena
 	return args.Get(0).(*scheduler.JobRun), args.Error(1)
 }
 
-func (m *mockJobRunRepository) Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, window interval.Interval, slaDefinitionInSec int64) error {
-	args := m.Called(ctx, tenant, name, scheduledAt, window, slaDefinitionInSec)
+func (m *mockJobRunRepository) Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, startTime time.Time, window interval.Interval, slaDefinitionInSec int64) error {
+	args := m.Called(ctx, tenant, name, scheduledAt, startTime, window, slaDefinitionInSec)
 	return args.Error(0)
 }
 

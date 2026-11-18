@@ -73,7 +73,7 @@ type JobRunRepository interface {
 	GetRunsByInterval(ctx context.Context, project tenant.ProjectName, jobName scheduler.JobName, interval interval.Interval) ([]*scheduler.JobRun, error)
 	GetByScheduledTimes(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledTimes []time.Time) ([]*scheduler.JobRun, error)
 	GetPercentileDurationByJobNames(ctx context.Context, jobNames []scheduler.JobName, operators map[string][]string, referenceTime time.Time, lastNRuns, percentile int) (map[scheduler.JobName]*time.Duration, error)
-	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, interval interval.Interval, slaDefinitionInSec int64) error
+	Create(ctx context.Context, tenant tenant.Tenant, name scheduler.JobName, scheduledAt time.Time, startTime time.Time, interval interval.Interval, slaDefinitionInSec int64) error
 	Update(ctx context.Context, jobRunID uuid.UUID, endTime time.Time, jobRunStatus scheduler.State) error
 	UpdateState(ctx context.Context, jobRunID uuid.UUID, jobRunStatus scheduler.State) error
 	UpdateSLA(ctx context.Context, jobName scheduler.JobName, project tenant.ProjectName, scheduledTimes []time.Time) error
@@ -777,7 +777,11 @@ func (s *JobRunService) cleanupJobQuery(requestCriteria scheduler.JobRunsCriteri
 	return requestCriteria, msg, nil
 }
 
-func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) error {
+// registerNewJobRun creates the job_run row for a first-seen scheduled time.
+// startTime is the callback's event time -- the moment Airflow said the run
+// started -- not the Optimus server clock, so start_time stays on the same
+// clock as every other timestamp the delay metrics compare it against.
+func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, startTime time.Time) error {
 	job, err := s.jobRepo.GetJobDetails(ctx, tenant.ProjectName(), jobName)
 	if err != nil {
 		s.l.Error("error getting job details for job [%s]: %s", jobName, err)
@@ -804,7 +808,14 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
-	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, windowInterval, slaDefinitionInSec)
+	// A zero event time (possible on SLA-miss paths, whose callbacks carry no
+	// event_time) falls back to the server clock -- an approximate row is
+	// better than none.
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+
+	err = s.repo.Create(ctx, tenant, jobName, scheduledAt, startTime, windowInterval, slaDefinitionInSec)
 	if err != nil {
 		s.l.Error("error creating job run: %s", err)
 		return err
@@ -815,12 +826,12 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		tenant.NamespaceName().String(),
 		jobName.String(),
 		scheduleDelay.String(),
-	).Set(float64(time.Now().Unix() - scheduledAt.Unix()))
+	).Set(float64(startTime.Unix() - scheduledAt.Unix()))
 
 	return nil
 }
 
-func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time) (*scheduler.JobRun, error) {
+func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, startTime time.Time) (*scheduler.JobRun, error) {
 	var jobRun *scheduler.JobRun
 	jobRun, err := s.repo.GetByScheduledAt(ctx, tenant, jobName, scheduledAt)
 	if err != nil {
@@ -829,7 +840,7 @@ func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenan
 			return nil, err
 		}
 		// TODO: consider moving below call outside as the caller is a 'getter'
-		err = s.registerNewJobRun(ctx, tenant, jobName, scheduledAt)
+		err = s.registerNewJobRun(ctx, tenant, jobName, scheduledAt, startTime)
 		if err != nil {
 			s.l.Error("error registering new job run: %s", err)
 			return nil, err
@@ -845,7 +856,7 @@ func (s *JobRunService) getJobRunByScheduledAt(ctx context.Context, tenant tenan
 
 func (s *JobRunService) updateJobRun(ctx context.Context, event *scheduler.Event) error {
 	var jobRun *scheduler.JobRun
-	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
+	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt, event.EventTime)
 	if err != nil {
 		s.l.Error("error getting job run by schedule time [%s]: %s", event.JobScheduledAt, err)
 		return err
@@ -1063,7 +1074,7 @@ func (s *JobRunService) registerSLAs(ctx context.Context, eventCtx *scheduler.Ev
 }
 
 func (s *JobRunService) getExistingOperatorRun(ctx context.Context, event *scheduler.Event) (*scheduler.OperatorRun, error) {
-	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
+	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt, event.EventTime)
 	if err != nil {
 		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
 		return nil, err
@@ -1080,7 +1091,7 @@ func (s *JobRunService) getExistingOperatorRun(ctx context.Context, event *sched
 }
 
 func (s *JobRunService) createOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
-	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
+	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt, event.EventTime)
 	if err != nil {
 		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
 		return err
@@ -1170,7 +1181,7 @@ func (s *JobRunService) CleanupSLA(ctx context.Context, event *scheduler.Event) 
 }
 
 func (s *JobRunService) updateOperatorRun(ctx context.Context, event *scheduler.Event, operatorType scheduler.OperatorType) error {
-	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt)
+	jobRun, err := s.getJobRunByScheduledAt(ctx, event.Tenant, event.JobName, event.JobScheduledAt, event.EventTime)
 	if err != nil {
 		s.l.Error("error getting job run by scheduled time [%s]: %s", event.JobScheduledAt, err)
 		return err

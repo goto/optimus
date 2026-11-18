@@ -554,10 +554,12 @@ func (j *JobRunRepository) UpdateMonitoring(ctx context.Context, jobRunID uuid.U
 	return errors.WrapIfErr(scheduler.EntityJobRun, "cannot update monitoring", err)
 }
 
-func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, window interval.Interval, slaDefinitionInSec int64) error {
-	// TODO: startTime should be event time
-	insertJobRun := `INSERT INTO job_run (` + columnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, NOW(), null, $5, $6, $7, $8, FALSE, NOW(), NOW()) ON CONFLICT DO NOTHING`
-	_, err := j.db.Exec(ctx, insertJobRun, jobName, t.NamespaceName(), t.ProjectName(), scheduledAt, window.Start(), window.End(), scheduler.StateRunning, slaDefinitionInSec)
+func (j *JobRunRepository) Create(ctx context.Context, t tenant.Tenant, jobName scheduler.JobName, scheduledAt time.Time, startTime time.Time, window interval.Interval, slaDefinitionInSec int64) error {
+	// startTime is the event time of the callback that created this run, not
+	// the database's NOW(): the row must reflect when Airflow reported the run
+	// starting, so delays measured against it stay on one clock.
+	insertJobRun := `INSERT INTO job_run (` + columnsToStore + `, created_at, updated_at) values ($1, $2, $3, $4, $5, null, $6, $7, $8, $9, FALSE, NOW(), NOW()) ON CONFLICT DO NOTHING`
+	_, err := j.db.Exec(ctx, insertJobRun, jobName, t.NamespaceName(), t.ProjectName(), scheduledAt, startTime, window.Start(), window.End(), scheduler.StateRunning, slaDefinitionInSec)
 	return errors.WrapIfErr(scheduler.EntityJobRun, "unable to create job run", err)
 }
 

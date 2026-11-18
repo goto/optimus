@@ -25,11 +25,11 @@ func createJobLineage(name string, tnnt tenant.Tenant, windowConfig *window.Conf
 		Window:           windowConfig,
 		SLA:              scheduler.SLAConfig{Duration: time.Hour},
 		Upstreams:        upstreams,
-		JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{},
 	}
 
 	for _, pair := range runPairs {
-		summary.JobRuns[pair.JobName] = pair.JobRunSum
+		summary.AddRun(scheduler.NewJobRunKey(pair.JobName, pair.JobRunSum.ScheduledAt), pair.JobRunSum)
 	}
 
 	return summary
@@ -185,7 +185,9 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 			ScheduleInterval: "0 8 * * *",
 			Window:           &windowConfig,
 			SLA:              scheduler.SLAConfig{Duration: time.Hour},
-			JobRuns:          map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): jobRun},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("root"), jobRun.ScheduledAt): jobRun,
+			},
 		}
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
@@ -198,7 +200,7 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 	t.Run("should limit top longest jobs to 3", func(t *testing.T) {
 		var upstreams []*scheduler.JobLineageSummary
-		jobRuns := make(map[scheduler.JobName]*scheduler.JobRunSummary)
+		jobRuns := make(map[scheduler.JobRunKey]*scheduler.JobRunSummary)
 
 		for i := 1; i <= 5; i++ {
 			jobName := scheduler.JobName(fmt.Sprintf("job%d", i))
@@ -211,11 +213,13 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 				TaskStartTime: &taskStart,
 				TaskEndTime:   &taskEnd,
 			}
-			jobRuns[scheduler.JobName("root")] = jobRun
+			jobRuns[scheduler.NewJobRunKey(scheduler.JobName("root"), baseTime)] = jobRun
 
 			upstream := &scheduler.JobLineageSummary{
 				JobName: jobName,
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): jobRun},
+				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+					scheduler.NewJobRunKey(scheduler.JobName("root"), jobRun.ScheduledAt): jobRun,
+				},
 			}
 			upstreams = append(upstreams, upstream)
 		}
@@ -224,12 +228,12 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 			JobName:     scheduler.JobName("root"),
 			ScheduledAt: baseTime,
 		}
-		jobRuns[scheduler.JobName("root")] = rootRun
+		jobRuns[scheduler.NewJobRunKey(scheduler.JobName("root"), baseTime)] = rootRun
 
 		jobLineage := &scheduler.JobLineageSummary{
-			JobName:   scheduler.JobName("root"),
-			Upstreams: upstreams,
-			JobRuns:   jobRuns,
+			JobName:          scheduler.JobName("root"),
+			Upstreams:        upstreams,
+			RunsByDownstream: jobRuns,
 		}
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
@@ -247,7 +251,9 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 
 		upstream := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("incomplete"),
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): incompleteRun},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("root"), incompleteRun.ScheduledAt): incompleteRun,
+			},
 		}
 
 		rootRun := &scheduler.JobRunSummary{
@@ -258,7 +264,9 @@ func TestJobLineageSummary_GenerateLineageExecutionSummary(t *testing.T) {
 		jobLineage := &scheduler.JobLineageSummary{
 			JobName:   scheduler.JobName("root"),
 			Upstreams: []*scheduler.JobLineageSummary{upstream},
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{scheduler.JobName("root"): rootRun},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("root"), rootRun.ScheduledAt): rootRun,
+			},
 		}
 
 		result := jobLineage.GenerateLineageExecutionSummary(scheduler.LineageWalkOptions{MaxNodes: 10, MaxDepth: 5})
@@ -434,8 +442,8 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 			createJobRunPair("root", "with_run", baseTime, baseTime.Add(5*time.Minute), baseTime.Add(10*time.Minute)))
 
 		upstreamWithoutRun := &scheduler.JobLineageSummary{
-			JobName: scheduler.JobName("without_run"),
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{},
+			JobName:          scheduler.JobName("without_run"),
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{},
 		}
 
 		jobLineage := createJobLineage("root", tnnt, &windowConfig,
@@ -525,9 +533,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 			Tenant:    tnnt,
 			SLA:       scheduler.SLAConfig{Duration: time.Hour},
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("B"): sharedRun,
-				scheduler.JobName("C"): sharedRun,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("B"), sharedRun.ScheduledAt): sharedRun,
+				scheduler.NewJobRunKey(scheduler.JobName("C"), sharedRun.ScheduledAt): sharedRun,
 			},
 		}
 		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
@@ -561,9 +569,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		d := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("D"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("B"): runViaB,
-				scheduler.JobName("C"): runViaC,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("B"), runViaB.ScheduledAt): runViaB,
+				scheduler.NewJobRunKey(scheduler.JobName("C"), runViaC.ScheduledAt): runViaC,
 			},
 		}
 		b := createJobLineage("B", tnnt, &windowConfig, []*scheduler.JobLineageSummary{d},
@@ -614,9 +622,9 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		shared := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("shared"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("root"): sharedRun,
-				scheduler.JobName("mid"):  sharedRun,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("root"), sharedRun.ScheduledAt): sharedRun,
+				scheduler.NewJobRunKey(scheduler.JobName("mid"), sharedRun.ScheduledAt):  sharedRun,
 			},
 		}
 		mid := createJobLineage("mid", tnnt, &windowConfig, []*scheduler.JobLineageSummary{shared},
@@ -657,8 +665,8 @@ func TestJobLineageSummary_GetLineageNodes(t *testing.T) {
 		notStarted := &scheduler.JobLineageSummary{
 			JobName: scheduler.JobName("not_started"),
 			Tenant:  tnnt,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				scheduler.JobName("root"): {
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(scheduler.JobName("root"), baseTime): {
 					JobName:     scheduler.JobName("not_started"),
 					ScheduledAt: baseTime,
 				},
@@ -1077,7 +1085,9 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		lineage := &scheduler.JobLineageSummary{
 			JobName: "job-A",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", run.ScheduledAt): run,
+			},
 		}
 
 		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
@@ -1105,7 +1115,9 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		lineage := &scheduler.JobLineageSummary{
 			JobName: "job-A",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": run},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", run.ScheduledAt): run,
+			},
 		}
 
 		scheduler.ClipLineageRunsToReferenceTime(map[scheduler.JobName]*scheduler.JobLineageSummary{"job-A": lineage}, referenceTime)
@@ -1122,24 +1134,31 @@ func TestClipLineageRunsToReferenceTime(t *testing.T) {
 		}
 		shared := &scheduler.JobLineageSummary{
 			JobName: "job-shared",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-B": sharedRun,
-				"job-C": sharedRun, // same pointer reached via two downstream paths
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-B", sharedRun.ScheduledAt): sharedRun,
+				scheduler.NewJobRunKey("job-C", sharedRun.ScheduledAt): sharedRun,
+				// same pointer reached via two downstream paths
 			},
 		}
 		jobB := &scheduler.JobLineageSummary{
-			JobName:   "job-B",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			JobName: "job-B",
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", before): {ScheduledAt: before},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{shared},
 		}
 		jobC := &scheduler.JobLineageSummary{
-			JobName:   "job-C",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			JobName: "job-C",
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", before): {ScheduledAt: before},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{shared},
 		}
 		root := &scheduler.JobLineageSummary{
-			JobName:   "job-A",
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {ScheduledAt: before}},
+			JobName: "job-A",
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", before): {ScheduledAt: before},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{jobB, jobC},
 		}
 
@@ -1197,15 +1216,19 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 		Upstreams: []*scheduler.JobLineageSummary{nodeA},
 	}
 	nodeM := &scheduler.JobLineageSummary{
-		JobName:   "job-m",
-		Tenant:    tnnt,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runM},
+		JobName: "job-m",
+		Tenant:  tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", runM.ScheduledAt): runM,
+		},
 		Upstreams: []*scheduler.JobLineageSummary{nodeB},
 	}
 	nodeT := &scheduler.JobLineageSummary{
-		JobName:   "job-t",
-		Tenant:    tnnt,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+		JobName: "job-t",
+		Tenant:  tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", runT.ScheduledAt): runT,
+		},
 		Upstreams: []*scheduler.JobLineageSummary{nodeB, nodeM},
 	}
 
@@ -1248,7 +1271,9 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 		// hand-built fixtures without RunsByDownstream fall back to the job-level view
 		legacy := &scheduler.JobLineageSummary{
 			JobName: "job-x",
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-y": runA15},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-y", runA15.ScheduledAt): runA15,
+			},
 		}
 		assert.Equal(t, runA15, legacy.GetRunForDownstream(scheduler.NewJobRunKey("job-y", day(16))))
 	})
@@ -1285,7 +1310,9 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 		t.Run("TargetRun falls back to the job-level view without run keys", func(t *testing.T) {
 			node := &scheduler.JobLineageSummary{
 				JobName: "job-t",
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+					scheduler.NewJobRunKey("job-t", runT.ScheduledAt): runT,
+				},
 			}
 			assert.Equal(t, runT, node.TargetRun())
 			assert.Nil(t, (&scheduler.JobLineageSummary{JobName: "job-t"}).TargetRun())
@@ -1293,7 +1320,9 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 
 		t.Run("HasRuns sees runs at either granularity", func(t *testing.T) {
 			assert.False(t, (&scheduler.JobLineageSummary{JobName: "job-t"}).HasRuns())
-			assert.True(t, (&scheduler.JobLineageSummary{JobName: "job-t", JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT}}).HasRuns())
+			assert.True(t, (&scheduler.JobLineageSummary{JobName: "job-t", RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-t", runT.ScheduledAt): runT,
+			}}).HasRuns())
 			assert.True(t, (&scheduler.JobLineageSummary{JobName: "job-t", RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
 				scheduler.NewJobRunKey("job-b", day(21)): runB21,
 			}}).HasRuns())
@@ -1316,7 +1345,10 @@ func TestJobLineageSummary_SameJobAtTwoRuns(t *testing.T) {
 
 			legacy := &scheduler.JobLineageSummary{
 				JobName: "job-b",
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-m": runB16, "job-t": runB21},
+				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+					scheduler.NewJobRunKey("job-m", runB16.ScheduledAt): runB16,
+					scheduler.NewJobRunKey("job-t", runB21.ScheduledAt): runB21,
+				},
 			}
 			assert.Len(t, legacy.DistinctRuns(), 2)
 		})

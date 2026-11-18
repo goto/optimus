@@ -53,10 +53,13 @@ func makeLineage(jobName scheduler.JobName, tnnt tenant.Tenant, run *scheduler.J
 		JobName:   jobName,
 		Tenant:    tnnt,
 		IsEnabled: true,
-		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{jobName: run},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey(jobName, run.ScheduledAt): run,
+		},
 	}
 	for _, upstream := range upstreams {
-		upstream.JobRuns[jobName] = upstream.JobRuns[upstream.JobName]
+		upstreamRun := upstream.TargetRun()
+		upstream.AddRun(scheduler.NewJobRunKey(jobName, upstreamRun.ScheduledAt), upstreamRun)
 	}
 	if len(upstreams) > 0 {
 		lineage.Upstreams = upstreams

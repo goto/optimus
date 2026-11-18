@@ -109,8 +109,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", scheduledAt): {JobName: "job-A", ScheduledAt: scheduledAt, HookName: nil},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -147,8 +147,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", scheduledAt): {JobName: "job-A", ScheduledAt: scheduledAt},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -181,8 +181,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName:   "job-A",
 			IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", scheduledAt): {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
 			},
 			Upstreams: []*scheduler.JobLineageSummary{},
 		}
@@ -236,19 +236,23 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 			return &scheduler.JobLineageSummary{
 				JobName:   "shared-upstream",
 				IsEnabled: true,
-				JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-					downstream: {JobName: "shared-upstream", ScheduledAt: scheduledAt},
+				RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+					scheduler.NewJobRunKey(downstream, scheduledAt): {JobName: "shared-upstream", ScheduledAt: scheduledAt},
 				},
 			}
 		}
 		lineageA := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-A": {JobName: "job-A", ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", scheduledAt): {JobName: "job-A", ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-A")},
 		}
 		lineageB := &scheduler.JobLineageSummary{
 			JobName: "job-B", IsEnabled: true,
-			JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-B": {JobName: "job-B", ScheduledAt: scheduledAt}},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-B", scheduledAt): {JobName: "job-B", ScheduledAt: scheduledAt},
+			},
 			Upstreams: []*scheduler.JobLineageSummary{sharedRun("job-B")},
 		}
 
@@ -293,8 +297,8 @@ func TestJobLineageService_GetJobExecutionSummary(t *testing.T) {
 		jobSchedule := &scheduler.JobSchedule{JobName: "job-A", ScheduledAt: scheduledAt}
 		lineageSummary := &scheduler.JobLineageSummary{
 			JobName: "job-A", IsEnabled: true,
-			JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{
-				"job-A": {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey("job-A", scheduledAt): {JobName: "job-A", ScheduledAt: scheduledAt, HookName: &hookName},
 			},
 		}
 

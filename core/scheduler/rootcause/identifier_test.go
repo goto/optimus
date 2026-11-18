@@ -573,3 +573,128 @@ func TestIdentifier_SameJobReachedAtTwoRuns(t *testing.T) {
 		"the flagged run must be the A@15 run, not the collapsed job-level A@20 entry")
 	assert.Equal(t, scheduler.SLABreachCauseNotStarted, state.Status)
 }
+
+func TestIdentifier_EscalationFollowsTheDownstreamRun(t *testing.T) {
+	// A job reached at two runs must escalate through the run the escalating run actually
+	// implies, not through the job-level view. The fixtures deliberately make the legacy
+	// job-name-keyed view point at the "wrong" run, so a run-blind escalation would blame
+	// the other path's upstream.
+	tnnt, err := tenant.NewTenant("project-a", "team-a")
+	assert.NoError(t, err)
+
+	day := func(hour int) time.Time { return time.Date(2026, 9, 10, hour, 0, 0, 0, time.UTC) }
+	dur := func(d time.Duration) *time.Duration { return &d }
+	at := func(t time.Time, m int) *time.Time {
+		v := t.Add(time.Duration(m) * time.Minute)
+		return &v
+	}
+	damper := scheduler.DamperFactor{Method: scheduler.DamperFactorMethodConstant, BaseValue: 1.0}
+
+	runA15 := &scheduler.JobRunSummary{
+		JobName: "job-a", ScheduledAt: day(15), JobStatus: scheduler.StateFailed.String(),
+		TaskStartTime: at(day(15), 2), TaskEndTime: at(day(15), 5), JobEndTime: at(day(15), 5),
+	}
+	runA20 := &scheduler.JobRunSummary{
+		JobName: "job-a", ScheduledAt: day(20),
+		TaskStartTime: at(day(20), 2), TaskEndTime: at(day(20), 5), JobEndTime: at(day(20), 5),
+	}
+	runB21 := &scheduler.JobRunSummary{JobName: "job-b", ScheduledAt: day(21)}        // never started
+	runB16Waiting := &scheduler.JobRunSummary{JobName: "job-b", ScheduledAt: day(16)} // never started
+	runB16Done := &scheduler.JobRunSummary{
+		JobName: "job-b", ScheduledAt: day(16),
+		TaskStartTime: at(day(16), 2), TaskEndTime: at(day(16), 5), JobEndTime: at(day(16), 5),
+	}
+	runMDone := &scheduler.JobRunSummary{
+		JobName: "job-m", ScheduledAt: day(17),
+		TaskStartTime: at(day(17), 2), TaskEndTime: at(day(17), 5), JobEndTime: at(day(17), 5),
+	}
+	runMWaiting := &scheduler.JobRunSummary{JobName: "job-m", ScheduledAt: day(17)} // never started
+	runT := &scheduler.JobRunSummary{JobName: "job-t", ScheduledAt: day(22)}        // never started
+
+	nodeADual := &scheduler.JobLineageSummary{
+		JobName: "job-a", IsEnabled: true, Tenant: tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-b", day(21)): runA20,
+			scheduler.NewJobRunKey("job-b", day(16)): runA15,
+		},
+		// the legacy job-name-keyed view collapsed to A@15: a run-blind escalation reading
+		// only this view would blame the failed A@15 even when climbing from B@21
+		JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-b": runA15},
+	}
+	nodeBDual := &scheduler.JobLineageSummary{
+		JobName: "job-b", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeADual},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-t", day(22)): runB21,
+			scheduler.NewJobRunKey("job-m", day(17)): runB16Done,
+		},
+	}
+	nodeMDual := &scheduler.JobLineageSummary{
+		JobName: "job-m", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeBDual},
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runMDone},
+	}
+	nodeTDual := &scheduler.JobLineageSummary{
+		JobName: "job-t", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeBDual, nodeMDual},
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-t": runT},
+	}
+
+	// a separate, minimal lineage for the M@17 target: M@17 waits on B@16, which waits on
+	// the failed A@15. The legacy view again points at the healthy A@20 instead.
+	nodeAOnly15 := &scheduler.JobLineageSummary{
+		JobName: "job-a", IsEnabled: true, Tenant: tnnt,
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-b", day(16)): runA15,
+		},
+		JobRuns: map[scheduler.JobName]*scheduler.JobRunSummary{"job-b": runA20},
+	}
+	nodeBOnly16 := &scheduler.JobLineageSummary{
+		JobName: "job-b", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeAOnly15},
+		RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+			scheduler.NewJobRunKey("job-m", day(17)): runB16Waiting,
+		},
+	}
+	nodeMOnly := &scheduler.JobLineageSummary{
+		JobName: "job-m", IsEnabled: true, Tenant: tnnt,
+		Upstreams: []*scheduler.JobLineageSummary{nodeBOnly16},
+		JobRuns:   map[scheduler.JobName]*scheduler.JobRunSummary{"job-m": runMWaiting},
+	}
+
+	identifier := rootcause.NewIdentifier(log.NewNoop(), fakeScheduledChangeGetter{}, nil, []string{"dex"}, rootcause.IdentifierConfig{})
+
+	t.Run("escalating from B@21 must not blame the other path's failed A@15", func(t *testing.T) {
+		targetSLA := day(22).Add(30 * time.Minute)
+		referenceTime := day(22).Add(32 * time.Minute)
+		jobDurations := map[scheduler.JobName]*time.Duration{
+			"job-t": dur(5 * time.Minute), "job-m": dur(5 * time.Minute),
+			"job-b": dur(5 * time.Minute), "job-a": dur(5 * time.Minute),
+		}
+
+		causes, _ := identifier.Identify(context.Background(), nodeTDual, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-b"]
+		assert.True(t, ok, "the climb from B@21 lands on the healthy A@20, so job-B stays the cause, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUnknown, cause.Reason)
+		assert.NotContains(t, causes, scheduler.JobName("job-a"),
+			"the failed A@15 belongs to the other path and must not be blamed")
+	})
+
+	t.Run("escalating from B@16 finds the failed A@15 of its own path", func(t *testing.T) {
+		targetSLA := day(17).Add(30 * time.Minute)
+		referenceTime := day(17).Add(32 * time.Minute)
+		jobDurations := map[scheduler.JobName]*time.Duration{
+			"job-m": dur(5 * time.Minute), "job-b": dur(5 * time.Minute), "job-a": dur(5 * time.Minute),
+		}
+
+		causes, _ := identifier.Identify(context.Background(), nodeMOnly, jobDurations, nil, &targetSLA, nil, damper, referenceTime)
+
+		assert.Len(t, causes, 1)
+		cause, ok := causes["job-a"]
+		assert.True(t, ok, "the climb from B@16 must reach the failed A@15, got: %+v", causes)
+		assert.Equal(t, scheduler.ReasonUpstreamFailed, cause.Reason)
+		assert.Equal(t, day(15), cause.JobRun.ScheduledAt, "the blamed run must be A@15, not the legacy A@20 entry")
+	})
+}

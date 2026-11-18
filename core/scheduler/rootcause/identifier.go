@@ -293,9 +293,12 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 	level := state.RelativeLevel
 	climbThroughWaiting := state.Status == scheduler.SLABreachCauseNotStarted
 	found := make([]scheduler.JobState, 0, i.maxRootCauseClimb)
+	// downstream is the run of the job being explained; the next hop's upstream run is the
+	// one this run implies, so it advances with every hop
+	downstream := scheduler.NewJobRunKey(state.JobName, state.JobRun.ScheduledAt)
 
 	for depth := 0; depth < i.maxRootCauseClimb; depth++ {
-		upstream, run := gatingUpstream(current, visited)
+		upstream, run := gatingUpstream(current, downstream, visited)
 		if upstream == nil || run == nil {
 			return found
 		}
@@ -304,6 +307,7 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 			return found
 		}
 		visited[upstream.JobName] = true
+		downstream = scheduler.NewJobRunKey(upstream.JobName, run.ScheduledAt)
 
 		candidateState := scheduler.JobState{
 			JobSLAState:   *slaState,
@@ -349,11 +353,12 @@ func (i *Identifier) escalate(ctx context.Context, state scheduler.JobState, nod
 	return found
 }
 
-// gatingUpstream returns the direct upstream of node most likely to have determined when node
-// actually started, reusing the same selection scheduler.SelectUpstreams already applies for
-// lineage-walk gating (latest-finishing, or the first still pending) instead of a second
-// ranking implementation.
-func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
+// gatingUpstream returns the direct upstream of node most likely to have determined when the
+// given downstream run actually started, reusing the same selection
+// scheduler.SelectUpstreamsForRun already applies for lineage-walk gating (latest-finishing,
+// or the first still pending) instead of a second ranking implementation. The upstream run is
+// the one the downstream run implies, so a job reached at two runs climbs through its own run.
+func gatingUpstream(node *scheduler.JobLineageSummary, downstream scheduler.JobRunKey, visited map[scheduler.JobName]bool) (*scheduler.JobLineageSummary, *scheduler.JobRunSummary) {
 	candidates := make([]*scheduler.JobLineageSummary, 0, len(node.Upstreams))
 	for _, upstream := range node.Upstreams {
 		if !visited[upstream.JobName] {
@@ -364,12 +369,12 @@ func gatingUpstream(node *scheduler.JobLineageSummary, visited map[scheduler.Job
 		return nil, nil
 	}
 
-	selected := scheduler.SelectUpstreams(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, 1)
+	selected := scheduler.SelectUpstreamsForRun(&scheduler.JobLineageSummary{JobName: node.JobName, Upstreams: candidates}, &downstream, 1)
 	if len(selected) == 0 {
 		return nil, nil
 	}
 	upstream := selected[0]
-	run := upstream.GetRunForJob(node.JobName)
+	run := upstream.GetRunForDownstream(downstream)
 	return upstream, run
 }
 

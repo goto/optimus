@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/goto/salt/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -419,6 +420,68 @@ func TestJobRunService(t *testing.T) {
 
 					err := runService.UpdateJobState(ctx, event)
 					assert.Nil(t, err)
+				})
+				t.Run("scenario should store the raw event time and clamp the schedule_delay gauge when the event predates scheduled_at (clock skew)", func(t *testing.T) {
+					skewedScheduledAt := time.Now().Add(-time.Hour).Truncate(time.Second).UTC()
+					skewedEventTime := skewedScheduledAt.Add(-5 * time.Second) // event "before" the schedule
+					skewedEvent := &scheduler.Event{
+						JobName:        scheduler.JobName("job_with_clock_skew"),
+						Tenant:         tnnt,
+						Type:           scheduler.JobFailureEvent,
+						Status:         scheduler.StateSuccess,
+						JobScheduledAt: skewedScheduledAt,
+						EventTime:      skewedEventTime,
+						Values:         map[string]any{"status": "success"},
+					}
+					skewedJobWithDetails := jobWithDetails
+					skewedJobWithDetails.Name = skewedEvent.JobName
+
+					jobRunRepo := new(mockJobRunRepository)
+					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, skewedEvent.JobName, skewedScheduledAt).Return(nil, errors.NotFound(scheduler.EntityJobRun, "job run not found")).Once()
+					// the stored start_time stays the raw event time; only the gauge is clamped
+					jobRunRepo.On("Create", ctx, tnnt, skewedEvent.JobName, skewedScheduledAt, skewedEventTime, mock.Anything, slaDefinitionInSec).Return(nil).Once()
+					jobRunRepo.On("GetByScheduledAt", ctx, tnnt, skewedEvent.JobName, skewedScheduledAt).Return(&jobRun, nil).Once()
+					jobRunRepo.On("Update", ctx, jobRun.ID, skewedEventTime, scheduler.StateSuccess).Return(nil)
+					jobRunRepo.On("UpdateMonitoring", ctx, jobRun.ID, mock.Anything).Return(nil)
+					defer jobRunRepo.AssertExpectations(t)
+
+					eventHandler := newEventHandler(t)
+					eventHandler.On("HandleEvent", mock.Anything).Times(1)
+					defer eventHandler.AssertExpectations(t)
+
+					projectGetter := new(mockProjectGetter)
+					defer projectGetter.AssertExpectations(t)
+					projectGetter.On("Get", ctx, projName).Return(project, nil)
+
+					jobRepo := new(JobRepository)
+					jobRepo.On("GetJobDetails", ctx, projName, skewedEvent.JobName).Return(&skewedJobWithDetails, nil)
+					defer jobRepo.AssertExpectations(t)
+
+					runService := service.NewJobRunService(logger,
+						jobRepo, jobRunRepo, nil, nil, nil, nil, nil, nil, eventHandler, projectGetter, feats, nil, nil)
+
+					err := runService.UpdateJobState(ctx, skewedEvent)
+					assert.Nil(t, err)
+
+					families, err := prometheus.DefaultGatherer.Gather()
+					assert.NoError(t, err)
+					found := false
+					for _, family := range families {
+						if family.GetName() != "jobrun_durations_breakdown_seconds" {
+							continue
+						}
+						for _, m := range family.GetMetric() {
+							labels := map[string]string{}
+							for _, l := range m.GetLabel() {
+								labels[l.GetName()] = l.GetValue()
+							}
+							if labels["job"] == skewedEvent.JobName.String() && labels["type"] == "schedule_delay" {
+								found = true
+								assert.Equal(t, float64(0), m.GetGauge().GetValue())
+							}
+						}
+					}
+					assert.True(t, found, "schedule_delay gauge was not recorded")
 				})
 			})
 		})

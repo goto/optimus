@@ -808,9 +808,10 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
-	// A zero event time (possible on SLA-miss paths, whose callbacks carry no
-	// event_time) falls back to the server clock -- an approximate row is
-	// better than none.
+	// Defensive only: event parsing rejects a missing event_time for every
+	// event type that can create a row (SLA-miss callbacks never create one),
+	// so a zero value should not occur. Fall back to the server clock rather
+	// than store the zero time.
 	if startTime.IsZero() {
 		startTime = time.Now()
 	}
@@ -821,12 +822,19 @@ func (s *JobRunService) registerNewJobRun(ctx context.Context, tenant tenant.Ten
 		return err
 	}
 
+	// Airflow and Optimus clocks can differ slightly, which would make the
+	// delay negative; a negative delay is meaningless, so clamp it to zero.
+	delaySeconds := startTime.Unix() - scheduledAt.Unix()
+	if delaySeconds < 0 {
+		delaySeconds = 0
+	}
+
 	jobRunDdurationsBreakdownSeconds.WithLabelValues(
 		tenant.ProjectName().String(),
 		tenant.NamespaceName().String(),
 		jobName.String(),
 		scheduleDelay.String(),
-	).Set(float64(startTime.Unix() - scheduledAt.Unix()))
+	).Set(float64(delaySeconds))
 
 	return nil
 }

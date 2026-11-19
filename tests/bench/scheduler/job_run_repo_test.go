@@ -81,7 +81,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 		}
 	})
@@ -103,7 +103,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			scheduledAts[i] = scheduledAt
@@ -139,7 +139,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForJobRun, scheduledAt)
@@ -174,7 +174,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 		assert.NoError(b, err)
 
 		scheduledAt := time.Now()
-		actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
+		actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 		assert.NoError(b, actualError)
 
 		storedJobRun, err := schedulerJobRunRepo.GetByScheduledAt(ctx, tnnt, jobNameForJobRun, scheduledAt)
@@ -207,7 +207,7 @@ func BenchmarkJobRunRepository(b *testing.B) {
 
 			scheduledAt := time.Now().Add(time.Second * time.Duration(i))
 
-			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, intr, int64(time.Second))
+			actualError := schedulerJobRunRepo.Create(ctx, tnnt, jobNameForJobRun, scheduledAt, scheduledAt, intr, int64(time.Second))
 			assert.NoError(b, actualError)
 
 			scheduledAts[i] = scheduledAt

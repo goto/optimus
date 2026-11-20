@@ -230,7 +230,10 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.J
 	}
 
 	// calculate max upstream expected finish time
-	maxUpstreamExpectedFinishTime := currentJobRun.ScheduledAt
+	// a job that has not started yet cannot finish before referenceTime, so the
+	// base is clamped to it; without this, a past-scheduled run that never
+	// started would get an expected finish time in the past
+	maxUpstreamExpectedFinishTime := maxTime(currentJobRun.ScheduledAt, referenceTime)
 	// avoid cyclic loop by temporarily setting the current job's expected finish time
 	jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 		Status:     FinishTimeStatusInprogress,

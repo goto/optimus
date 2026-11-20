@@ -179,6 +179,9 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.J
 	jobEndTime := currentJobRun.JobEndTime
 
 	// termination condition: 1. if end_time is not nil
+	// note: a run whose hook is still running carries no JobEndTime, so it falls through
+	// to the started branches below - consistent with the completion-time report, which
+	// treats hook-running runs as unfinished via JobRunSummary.IsFinished
 	if jobEndTime != nil {
 		// if job has already ended, we can set the expected finish time to job end time
 		s.l.Debug(fmt.Sprintf("job has already ended, setting expected finish time to job end time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
@@ -333,11 +336,23 @@ func (s *JobExpectatorService) computeCompletionTimeReports(ctx context.Context,
 			continue
 		}
 
-		if run := lineage.GetRunForDownstream(scheduler.NewJobRunKey(jobSchedule.JobName, jobSchedule.ScheduledAt)); run != nil && (run.GetActualEndTime() == nil ||
-			run.GetActualEndTime().After(referenceTime)) {
-			unfinishedJobSchedules = append(unfinishedJobSchedules, *jobSchedule)
-			unfinishedJobsWithLineageMap[jobSchedule.JobName] = lineage
+		run := lineage.GetRunForDownstream(scheduler.NewJobRunKey(jobSchedule.JobName, jobSchedule.ScheduledAt))
+		if run == nil {
+			continue
+		}
+		// IsFinished is used instead of GetActualEndTime alone: a run whose task has ended
+		// but whose hook is still running reports the task end via GetActualEndTime, which
+		// would wrongly drop it from the report as settled
+		if run.IsFinished() && !run.GetActualEndTime().After(referenceTime) {
+			continue // already settled at or before referenceTime
+		}
+		unfinishedJobSchedules = append(unfinishedJobSchedules, *jobSchedule)
+		unfinishedJobsWithLineageMap[jobSchedule.JobName] = lineage
+		if run.IsFinished() {
+			// the run finished after referenceTime (replay); report the real finish time
 			actualFinishTimes[*jobSchedule] = run.GetActualEndTime()
+		} else {
+			actualFinishTimes[*jobSchedule] = nil
 		}
 	}
 

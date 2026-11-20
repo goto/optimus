@@ -1301,6 +1301,175 @@ func TestGenerateJobExpectedCompletionTimeReport(t *testing.T) {
 		}
 	})
 
+	t.Run("given a run whose task ended but whose hook is still running, it should be reported as unfinished with no actual finish time", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(-2 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		jobA := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job:  &scheduler.Job{Tenant: tnnt, Name: jobAName},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		taskEndTime := referenceTime.Add(-90 * time.Minute) // task done
+		hookStartTime := referenceTime.Add(-60 * time.Minute)
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
+					JobName:       jobAName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt,
+					TaskEndTime:   &taskEndTime,
+					HookStartTime: &hookStartTime, // hook still running
+					JobEndTime:    nil,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		if assert.Len(t, summary.Details, 1) {
+			assert.Nil(t, summary.Details[0].ActualFinishTime, "a running hook must not report the task end as the actual finish time")
+			assert.Nil(t, summary.Details[0].Delay)
+		}
+		assert.Nil(t, summary.Summary.MeanDelay)
+	})
+
+	t.Run("given a run whose task and hook both ended strictly before referenceTime, it should be excluded from the report as already settled", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(-3 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		jobA := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job:  &scheduler.Job{Tenant: tnnt, Name: jobAName},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		taskEndTime := referenceTime.Add(-90 * time.Minute)
+		hookEndTime := referenceTime.Add(-30 * time.Minute) // fully finished before referenceTime
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
+					JobName:       jobAName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt,
+					TaskEndTime:   &taskEndTime,
+					HookStartTime: &taskEndTime,
+					HookEndTime:   &hookEndTime,
+					JobEndTime:    &hookEndTime,
+					JobStatus:     "success",
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{}).
+			Return(map[scheduler.JobName]*time.Duration{}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		if assert.NotNil(t, summary) {
+			assert.Empty(t, summary.Details)
+		}
+	})
+
+	t.Run("given a run whose hook ends after referenceTime, it should be included with the real actual finish time", func(t *testing.T) {
+		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
+
+		projectName := tenant.ProjectName("project-a")
+		jobAName := scheduler.JobName("job-A")
+		scheduledAt := referenceTime.Add(-2 * time.Hour).Truncate(time.Hour)
+		startDate := scheduledAt.Add(-24 * time.Hour).Truncate(time.Hour)
+		interval := fmt.Sprintf("0 %d * * *", scheduledAt.Hour())
+		tnnt, _ := tenant.NewTenant(projectName.String(), "team-a")
+		jobA := &scheduler.JobWithDetails{
+			Name: jobAName,
+			Job:  &scheduler.Job{Tenant: tnnt, Name: jobAName},
+			Schedule: &scheduler.Schedule{
+				StartDate: startDate,
+				Interval:  interval,
+			},
+		}
+
+		taskEndTime := referenceTime.Add(-90 * time.Minute)
+		hookStartTime := referenceTime.Add(-60 * time.Minute)
+		hookEndTime := referenceTime.Add(20 * time.Minute) // finished after referenceTime (replay)
+		lineageA := &scheduler.JobLineageSummary{
+			JobName:   jobAName,
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobAName, scheduledAt): {
+					JobName:       jobAName,
+					ScheduledAt:   scheduledAt,
+					TaskStartTime: &scheduledAt,
+					TaskEndTime:   &taskEndTime,
+					HookStartTime: &hookStartTime,
+					HookEndTime:   &hookEndTime,
+					JobStatus:     "success",
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+
+		jobDetailsGetter.On("GetJobs", ctx, projectName, []string{jobAName.String()}).Return([]*scheduler.JobWithDetails{jobA}, nil)
+		jobLineageFetcher.On("GetJobLineage", ctx, map[scheduler.JobName]*scheduler.JobSchedule{jobAName: {JobName: jobAName, ScheduledAt: scheduledAt}}, int(scheduleRangeInHours.Hours())).
+			Return(map[scheduler.JobName]*scheduler.JobLineageSummary{jobAName: lineageA}, nil)
+		durationEstimator.On("GetPercentileDurationByJobNames", ctx, referenceTime, []scheduler.JobName{jobAName}).
+			Return(map[scheduler.JobName]*time.Duration{jobAName: func() *time.Duration { d := 30 * time.Minute; return &d }()}, nil)
+
+		summary, err := svc.GenerateJobExpectedCompletionTimeReport(ctx, []scheduler.JobFilterRequest{
+			{ProjectName: projectName, JobNames: []scheduler.JobName{jobAName}},
+		}, referenceTime, scheduleRangeInHours)
+
+		assert.NoError(t, err)
+		if assert.Len(t, summary.Details, 1) {
+			// the hook end is clipped from the lineage but captured before clipping for the report
+			if assert.NotNil(t, summary.Details[0].ActualFinishTime) {
+				assert.Equal(t, hookEndTime, *summary.Details[0].ActualFinishTime)
+			}
+			// expected = referenceTime + buffer (running late), actual is 20m later
+			if assert.NotNil(t, summary.Details[0].Delay) {
+				assert.Equal(t, 10*time.Minute, *summary.Details[0].Delay)
+			}
+		}
+	})
+
 	t.Run("MeanDelay should average only jobs that actually finished later than expected, excluding early finishes", func(t *testing.T) {
 		svc, _, jobDetailsGetter, jobLineageFetcher, durationEstimator := newService()
 

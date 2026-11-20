@@ -491,11 +491,8 @@ func (s *JobRootCauseService) sendRootCauseAlerts(ctx context.Context, incidents
 	}
 }
 
-// alertSeverity picks the alert severity for one reason. A finished root cause has
-// already had its full impact, so there is nothing left to react to urgently — it goes
-// out as a warning for the record, regardless of the configured severity.
 func (s *JobRootCauseService) alertSeverity(reason scheduler.RootCauseReasonDetail) string {
-	if reason.IsJobFinished {
+	if reason.IsJobFinished && s.config.FinishedAlertWarningOnly {
 		return "WARNING"
 	}
 	return s.config.AlertSeverity

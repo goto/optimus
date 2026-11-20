@@ -331,6 +331,7 @@ func (s *ConfigTestSuite) initExpectedServerConfig() {
 		ThirdPartyDelayThresholdSeconds: 900,
 		DedupWindowMinutes:              60,
 		AlertSeverity:                   "WARNING",
+		FinishedAlertWarningOnly:        true,
 		LineageBatchSize:                50,
 		IncidentResolutionWindowHours:   24,
 		// platform teams default to empty: routing is disabled until configured

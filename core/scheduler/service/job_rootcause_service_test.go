@@ -1389,12 +1389,13 @@ func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
 		}
 	}
 
-	newSvc := func(alertSeverity string, notifier *mockRootCauseNotifier) *service.JobRootCauseService {
+	newSvc := func(alertSeverity string, finishedWarningOnly bool, notifier *mockRootCauseNotifier) *service.JobRootCauseService {
 		alertConfig := config.RootCauseAlertConfig{
 			RuntimeDelayThresholdMinutes:    30,
 			SchedulerDelayMinutesPerDepth:   2.5,
 			ThirdPartyDelayThresholdSeconds: 600,
 			AlertSeverity:                   alertSeverity,
+			FinishedAlertWarningOnly:        finishedWarningOnly,
 		}
 		// the alert path only touches the notifier and the team getter; the getters
 		// behind the engine stay nil
@@ -1413,7 +1414,7 @@ func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("WARNING"))
 
-		svc := newSvc("CRITICAL", notifier)
+		svc := newSvc("CRITICAL", true, notifier)
 		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
 		notifier.AssertExpectations(t)
 	})
@@ -1422,7 +1423,7 @@ func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("CRITICAL"))
 
-		svc := newSvc("CRITICAL", notifier)
+		svc := newSvc("CRITICAL", true, notifier)
 		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(false)}, nil)
 		notifier.AssertExpectations(t)
 	})
@@ -1431,7 +1432,25 @@ func TestJobRootCauseService_AlertSeverityForFinishedCause(t *testing.T) {
 		notifier := &mockRootCauseNotifier{}
 		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("WARNING"))
 
-		svc := newSvc("INFO", notifier)
+		svc := newSvc("INFO", true, notifier)
+		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
+		notifier.AssertExpectations(t)
+	})
+
+	t.Run("with the cap off, a finished cause keeps the configured CRITICAL", func(t *testing.T) {
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("CRITICAL"))
+
+		svc := newSvc("CRITICAL", false, notifier)
+		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
+		notifier.AssertExpectations(t)
+	})
+
+	t.Run("with the cap off, a finished cause keeps the configured WARNING", func(t *testing.T) {
+		notifier := &mockRootCauseNotifier{}
+		notifier.On("SendRootCauseBreach", mock.Anything).Once().Run(assertSeverity("WARNING"))
+
+		svc := newSvc("WARNING", false, notifier)
 		svc.SendRootCauseAlertsForTest(ctx, []*scheduler.SLABreachIncidentWithImpacts{incidentWith(true)}, nil)
 		notifier.AssertExpectations(t)
 	})

@@ -158,7 +158,12 @@ func (s *JobExpectatorService) GenerateExpectedFinishTimes(ctx context.Context, 
 // run to support lineages where a shared upstream is reached at several schedules.
 func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.JobRunKey, currentJobWithLineage *scheduler.JobLineageSummary, jobRunExpectedFinishTimes map[scheduler.JobSchedule]FinishTimeDetail, jobDurationsEstimation map[scheduler.JobName]*time.Duration, referenceTime time.Time) error {
 	// pre condition check
-	if currentJobWithLineage == nil || currentJobWithLineage.GetRunForDownstream(selfParent) == nil {
+	if currentJobWithLineage == nil {
+		// TODO: add metric to track how many times this happens
+		s.l.Error("[critical] no job lineage provided, skipping expected finish time calculation")
+		return nil
+	}
+	if currentJobWithLineage.GetRunForDownstream(selfParent) == nil {
 		// TODO: add metric to track how many times this happens
 		s.l.Error(fmt.Sprintf("[critical] no job run found for job [%s], skipping expected finish time calculation", currentJobWithLineage.JobName))
 		return nil
@@ -221,7 +226,8 @@ func (s *JobExpectatorService) PopulateExpectedFinishTime(selfParent scheduler.J
 		}
 		// termination condition: 4. if start_time is not nil
 		// job already started but not running late
-		s.l.Debug(fmt.Sprintf("job already started but not running late, setting expected finish time to task start time + estimated duration + buffer time [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
+		// no extra buffer is added here as the estimated duration already includes it
+		s.l.Debug(fmt.Sprintf("job already started but not running late, setting expected finish time to task start time + estimated duration [job: %s, scheduled_at: %s]", currentJobWithLineage.JobName, currentJobRun.ScheduledAt))
 		jobRunExpectedFinishTimes[currentJobScheduleKey] = FinishTimeDetail{
 			Status:     FinishTimeStatusInprogress,
 			FinishTime: taskStartTime.Add(*estimatedDuration),
@@ -402,7 +408,7 @@ func (s *JobExpectatorService) getJobWithDetails(ctx context.Context, req schedu
 			if jobsWithDetails == nil {
 				return nil, err
 			}
-			s.l.Error("[getJobWithDetailsMultiValueLabels] encountered non-blocking error when fetching jobs by names: %s", err.Error())
+			s.l.Error(fmt.Sprintf("[getJobWithDetails] encountered non-blocking error when fetching jobs by names: %s", err.Error()))
 		}
 		for _, job := range jobsWithDetails {
 			filteredJobMerged[job.Name] = job
@@ -415,7 +421,7 @@ func (s *JobExpectatorService) getJobWithDetails(ctx context.Context, req schedu
 			if jobsWithDetails == nil {
 				return nil, err
 			}
-			s.l.Error("[getJobWithDetailsMultiValueLabels] encountered non-blocking error when fetching jobs by labels: %s", err.Error())
+			s.l.Error(fmt.Sprintf("[getJobWithDetails] encountered non-blocking error when fetching jobs by labels: %s", err.Error()))
 		}
 		for _, job := range jobsWithDetails {
 			filteredJobMerged[job.Name] = job

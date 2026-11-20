@@ -210,10 +210,11 @@ type WaitingUpstreamEvidence struct {
 	InferredSLA              *time.Time `json:"inferred_sla,omitempty"`
 	EstimatedDurationSeconds *int       `json:"estimated_duration_seconds,omitempty"`
 	LatestSafeStart          *time.Time `json:"latest_safe_start,omitempty"`
-	// HasMissingUpstreamRun is true when at least one upstream run was never
-	// created; false means every upstream succeeded and the node still did not
-	// start, pointing at a scheduling or trigger gap.
-	HasMissingUpstreamRun bool `json:"has_missing_upstream_run,omitempty"`
+	// MissingUpstreamRuns names the upstreams (project/job) whose expected run was
+	// never created. Empty means every upstream succeeded and the node still did
+	// not start, pointing at a scheduling or trigger gap; non-empty names the runs
+	// to create or backfill.
+	MissingUpstreamRuns []string `json:"missing_upstream_runs,omitempty"`
 }
 
 // AggressiveSLAEvidence backs the aggressive-SLA reason: the target is past its

@@ -332,13 +332,17 @@ func waitingUpstreamEvidence(walk *scheduler.LineageWalkResult, node *scheduler.
 		}
 	}
 	// the rule fires when every upstream is successful or never created;
-	// HasMissingUpstreamRun distinguishes the two cases so the reader knows
-	// whether the node is waiting on an upstream run that was never created
+	// MissingUpstreamRuns distinguishes the two cases so the reader knows
+	// whether the node is waiting on an upstream run that was never created,
+	// and names those upstreams
 	for _, upstreamKey := range walk.UpstreamsByKey[node.Key()] {
 		if upstream, ok := walk.NodesByKey[upstreamKey]; ok && upstream.State == scheduler.StateNotScheduled {
-			section.HasMissingUpstreamRun = true
-			break
+			section.MissingUpstreamRuns = append(section.MissingUpstreamRuns,
+				upstream.ProjectName.String()+"/"+upstream.JobName.String())
 		}
+	}
+	if len(section.MissingUpstreamRuns) > scheduler.MaxEvidenceComponents {
+		section.MissingUpstreamRuns = section.MissingUpstreamRuns[:scheduler.MaxEvidenceComponents]
 	}
 	return &scheduler.ReasonEvidence{
 		ReferenceTime:   referenceTime.UTC(),

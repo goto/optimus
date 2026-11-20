@@ -561,7 +561,49 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.Equal(t, testBaseTime.Add(2*time.Hour).UTC(), *waiting.InferredSLA)
 		assert.Equal(t, int(30*time.Minute/time.Second), *waiting.EstimatedDurationSeconds)
 		assert.Equal(t, testBaseTime.Add(90*time.Minute).UTC(), *waiting.LatestSafeStart)
-		assert.False(t, waiting.HasMissingUpstreamRun, "the upstream succeeded; the node waits on nothing missing")
+		assert.Empty(t, waiting.MissingUpstreamRuns, "the upstream succeeded; the node waits on nothing missing")
+	})
+
+	t.Run("tier 5 names the upstream runs that were never created", func(t *testing.T) {
+		// b1 is stuck waiting on its upstream, whose expected run was never created
+		// (not_scheduled): the evidence names which upstream run does not exist
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour), nil, nil, "")
+		b1Run := makeRun("job_b1", testBaseTime.Add(-time.Hour), nil, nil, "queued")
+		b1Run.WaitStartTime = ptr(testBaseTime.Add(-time.Hour))
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_b1", tenantProjB, b1Run,
+				makeLineage("job_a2", tenantProjA, a2Run)))
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": 90 * time.Minute,
+		}
+
+		finding := permissiveFinding(target)
+		finding.BreachStates = map[scheduler.JobName]*scheduler.JobState{
+			"job_b1": {
+				JobName: "job_b1",
+				JobSLAState: scheduler.JobSLAState{
+					InferredSLA:       ptr(testBaseTime.Add(2 * time.Hour)),
+					EstimatedDuration: durPtr(30 * time.Minute),
+				},
+				Status: scheduler.SLABreachCauseNotStarted,
+				JobRun: scheduler.JobRunSummary{JobName: "job_b1", ScheduledAt: testBaseTime.Add(-time.Hour)},
+			},
+		}
+		detections := testPublisher().Evaluate(rootcause.TargetEvaluation{
+			Target: target, HistoricalByJob: historical, ReferenceTime: referenceTime,
+			Finding: finding,
+		})
+
+		matched := detectionsByReason(detections, scheduler.TierWaitingUpstream)
+		assert.Len(t, matched, 1)
+		waiting := matched[0].Reason.Evidence.WaitingUpstream
+		assert.NotNil(t, waiting)
+		assert.Equal(t, string(scheduler.StateWaitUpstream), waiting.NodeState)
+		assert.Equal(t, []string{"p_a/job_a2"}, waiting.MissingUpstreamRuns,
+			"the never-created upstream run is named so the reader knows what to create")
 	})
 
 	t.Run("tier 5 skipped while the upstream is still running; tier 1 reports the slow run", func(t *testing.T) {

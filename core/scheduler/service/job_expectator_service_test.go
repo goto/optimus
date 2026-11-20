@@ -436,6 +436,33 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		assert.Empty(t, jobRunExpectedFinishTime)
 	})
 
+	t.Run("when lineage is nil, should skip without panicking", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(scheduler.NewJobRunKey(scheduler.JobName("job-A"), referenceTime), nil, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		assert.Empty(t, jobRunExpectedFinishTime)
+	})
+
 	t.Run("when end_time is not nil, should set expected finish time to job end time", func(t *testing.T) {
 		// given
 		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)

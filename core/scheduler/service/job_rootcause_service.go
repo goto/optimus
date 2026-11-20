@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"time"
@@ -315,11 +316,80 @@ func (s *JobRootCauseService) persistIncidents(ctx context.Context, reqConfig Ro
 				"project", incident.Incident.Key.ProjectName.String(),
 				"job", incident.Incident.Key.JobName.String(),
 				"error", err)
+			continue
 		}
+		s.logDelayChanges(previous, merged)
 	}
 
 	s.resolveUntouchedIncidents(ctx, reqConfig, freshKeys)
 	return previousByKey
+}
+
+// logDelayChanges records one line per active reason whose induced delay is new or changed, including the evidence that explains the number.
+// Unchanged observations stay silent, so the log stays readable while a running incident is watched tick by tick.
+// Note: observe mode (enable_alert: false) persists nothing, so it produces no evidence lines either.
+func (s *JobRootCauseService) logDelayChanges(previous, merged *scheduler.SLABreachIncident) {
+	for _, reason := range merged.Details.Reasons {
+		if reason.Status != scheduler.ReasonStatusActive {
+			continue // resolutions have their own line
+		}
+		if !delayChanged(previous, reason) {
+			continue
+		}
+		attrs := []any{
+			"project", merged.Key.ProjectName.String(),
+			"job", merged.Key.JobName.String(),
+			"scheduled_at", merged.Key.ScheduledAt.UTC().Format(time.RFC3339),
+			"reason", string(reason.Reason),
+			"induced_delay_seconds", reason.InducedDelaySeconds,
+			"previous_induced_delay_seconds", previousDelayOf(previous, reason.Reason),
+			"is_job_finished", reason.IsJobFinished,
+			"delay_scope", reason.DelayScope,
+		}
+		if reason.Evidence != nil {
+			attrs = append(attrs, "reference_time", reason.Evidence.ReferenceTime.UTC().Format(time.RFC3339))
+			if raw, err := json.Marshal(reason.Evidence); err == nil {
+				attrs = append(attrs, "evidence", string(raw))
+			}
+		}
+		s.l.Info("root-cause delay recorded", attrs...)
+	}
+}
+
+// delayChanged reports whether a fresh observation of a reason changes the recorded
+// delay story: the reason is new (no previous incident, no such reason, or it was
+// resolved and has come back), or its InducedDelaySeconds differs from the last one.
+func delayChanged(previous *scheduler.SLABreachIncident, fresh scheduler.RootCauseReasonDetail) bool {
+	if previous == nil {
+		return true
+	}
+	var previousReason *scheduler.RootCauseReasonDetail
+	for i := range previous.Details.Reasons {
+		if previous.Details.Reasons[i].Reason == fresh.Reason {
+			previousReason = &previous.Details.Reasons[i]
+			break
+		}
+	}
+	if previousReason == nil {
+		return true
+	}
+	if previousReason.Status == scheduler.ReasonStatusResolved {
+		return true // the reason came back after being resolved
+	}
+	return previousReason.InducedDelaySeconds != fresh.InducedDelaySeconds
+}
+
+// previousDelayOf returns the previously recorded delay of a reason, or -1 when there was none.
+func previousDelayOf(previous *scheduler.SLABreachIncident, reason scheduler.SLABreachTier) int {
+	if previous == nil {
+		return -1
+	}
+	for _, existing := range previous.Details.Reasons {
+		if existing.Reason == reason {
+			return existing.InducedDelaySeconds
+		}
+	}
+	return -1
 }
 
 // resolveUntouchedIncidents flips the remaining active reasons of every tracked incident

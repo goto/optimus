@@ -167,12 +167,17 @@ type RootCauseAlertConfig struct {
 	// ThirdPartyDelayThresholdSeconds is the induced-delay floor for THIRD_PARTY_DELAY.
 	ThirdPartyDelayThresholdSeconds int `mapstructure:"third_party_delay_threshold_seconds" default:"900"`
 
-	DedupWindowMinutes int                    `mapstructure:"dedup_window_minutes" default:"60"`
-	InfraTeam          string                 `mapstructure:"infra_team"`
-	ThirdPartyTeam     string                 `mapstructure:"third_party_team"`
-	AlertSeverity      string                 `mapstructure:"alert_severity" default:"WARNING"`
-	AlertSuppression   AlertSuppressionConfig `mapstructure:"alert_suppression"`
-	ExcludeProjects    []string               `mapstructure:"exclude_projects"`
+	DedupWindowMinutes int    `mapstructure:"dedup_window_minutes" default:"60"`
+	InfraTeam          string `mapstructure:"infra_team"`
+	ThirdPartyTeam     string `mapstructure:"third_party_team"`
+
+	AlertSeverity string `mapstructure:"alert_severity" default:"WARNING"`
+	// FinishedAlertWarningOnly caps alerts for finished root causes to WARNING.
+	// Set false to let finished causes alert at the configured alert_severity (e.g. CRITICAL).
+	FinishedAlertWarningOnly bool                   `mapstructure:"finished_alert_warning_only" default:"true"`
+	AlertSuppression         AlertSuppressionConfig `mapstructure:"alert_suppression"`
+
+	ExcludeProjects []string `mapstructure:"exclude_projects"`
 	// LineageBatchSize caps how many targets get their upstream lineage built at once
 	// during root-cause identification; lower it if identify requests exhaust memory.
 	// 0 keeps the built-in default.

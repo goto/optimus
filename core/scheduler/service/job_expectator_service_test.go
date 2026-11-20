@@ -727,6 +727,118 @@ func TestPopulateExpectedFinishTime(t *testing.T) {
 		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
 	})
 
+	t.Run("when targeted job was scheduled in the past but has not started, should clamp expected finish time to reference time + expected duration", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		scheduledAt := referenceTime.Add(-2 * time.Hour) // scheduled in the past, never started
+		jobTarget := &scheduler.JobSchedule{
+			JobName:     scheduler.JobName("job-A"),
+			ScheduledAt: scheduledAt,
+		}
+		currentJobWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
+					JobName:     jobTarget.JobName,
+					ScheduledAt: scheduledAt,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(scheduler.NewJobRunKey(jobTarget.JobName, jobTarget.ScheduledAt), currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		expectedExpectedFinishTime := referenceTime.Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+	})
+
+	t.Run("when targeted job was scheduled in the past and its upstream is also running late, should clamp expected finish time to reference time + expected duration", func(t *testing.T) {
+		// given
+		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
+		jobDetailsGetter := NewJobDetailsGetter(t)
+		jobLineageFetcher := NewJobLineageFetcher(t)
+		durationEstimator := NewDurationEstimator(t)
+
+		jobExpectatorService := service.NewJobExpectatorService(
+			l,
+			10,
+			jobRunExpectationDetailsRepo,
+			jobDetailsGetter,
+			jobLineageFetcher,
+			durationEstimator,
+		)
+		jobRunExpectedFinishTime := map[scheduler.JobSchedule]service.FinishTimeDetail{}
+		jobDurationEstimation := map[scheduler.JobName]*time.Duration{}
+
+		scheduledAt := referenceTime.Add(-2 * time.Hour)         // scheduled in the past, never started
+		upstreamScheduledAt := referenceTime.Add(-3 * time.Hour) // upstream scheduled in the past
+		jobTarget := &scheduler.JobSchedule{
+			JobName:     scheduler.JobName("job-A"),
+			ScheduledAt: scheduledAt,
+		}
+		currentJobWithLineage := &scheduler.JobLineageSummary{
+			JobName:   jobTarget.JobName,
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, scheduledAt): {
+					JobName:     jobTarget.JobName,
+					ScheduledAt: scheduledAt,
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		jobUpstreamWithLineage := &scheduler.JobLineageSummary{
+			JobName:   scheduler.JobName("job-B"),
+			IsEnabled: true,
+			RunsByDownstream: map[scheduler.JobRunKey]*scheduler.JobRunSummary{
+				scheduler.NewJobRunKey(jobTarget.JobName, upstreamScheduledAt): {
+					JobName:     scheduler.JobName("job-B"),
+					ScheduledAt: upstreamScheduledAt,
+					TaskStartTime: func() *time.Time {
+						t := upstreamScheduledAt.Add(25 * time.Minute) // started late
+						return &t
+					}(),
+					JobEndTime: nil, // still running
+				},
+			},
+			Upstreams: []*scheduler.JobLineageSummary{},
+		}
+		currentJobWithLineage.Upstreams = append(currentJobWithLineage.Upstreams, jobUpstreamWithLineage)
+
+		jobDurationEstimation[jobTarget.JobName] = func() *time.Duration { d := 30 * time.Minute; return &d }()
+		jobDurationEstimation[jobUpstreamWithLineage.JobName] = func() *time.Duration { d := 45 * time.Minute; return &d }()
+
+		// when
+		err := jobExpectatorService.PopulateExpectedFinishTime(scheduler.NewJobRunKey(jobTarget.JobName, jobTarget.ScheduledAt), currentJobWithLineage, jobRunExpectedFinishTime, jobDurationEstimation, referenceTime)
+
+		// then
+		assert.NoError(t, err)
+		// the upstream is running late, so it is expected to finish at referenceTime + buffer;
+		// the target then finishes one duration after that
+		expectedExpectedFinishTime := referenceTime.Add(10 * time.Minute).Add(30 * time.Minute)
+		assert.Equal(t, expectedExpectedFinishTime, jobRunExpectedFinishTime[*jobTarget].FinishTime)
+	})
+
 	t.Run("when targeted job will run in the future, and there's an upstream job running late, should set expected finish time to max(upstream expected finish time, scheduled_at) + expected duration", func(t *testing.T) {
 		// given
 		jobRunExpectationDetailsRepo := NewJobRunExpectationDetailsRepository(t)
@@ -1558,12 +1670,13 @@ func TestPopulateExpectedFinishTime_SameJobAtTwoRuns(t *testing.T) {
 	err := jobExpectatorService.PopulateExpectedFinishTime(scheduler.NewJobRunKey("job-t", day(22)), nodeT, jobRunExpectedFinishTime, jobDurationsEstimation, referenceTime)
 
 	assert.NoError(t, err)
-	// B@21 waits on A@20 (finished 20:30), so its expected finish is its own schedule + duration
-	assert.Equal(t, day(21).Add(30*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-b", ScheduledAt: day(21)}].FinishTime)
+	// B@21 waits on A@20 (finished 20:30), but it has not started by referenceTime (23:00),
+	// so its expected finish is clamped to referenceTime + duration
+	assert.Equal(t, referenceTime.Add(30*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-b", ScheduledAt: day(21)}].FinishTime)
 	// B@16 finished already, its expected finish is its own end time
 	assert.Equal(t, day(16).Add(40*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-b", ScheduledAt: day(16)}].FinishTime)
-	// M@17 waits on B@16 (16:40, before its own schedule), so its schedule wins
-	assert.Equal(t, day(17).Add(30*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-m", ScheduledAt: day(17)}].FinishTime)
-	// T@22 is held back by B@21 (21:30) and M@17 (17:40), so its schedule wins
-	assert.Equal(t, day(22).Add(30*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-t", ScheduledAt: day(22)}].FinishTime)
+	// M@17 also has not started by referenceTime (23:00), so its expected finish is clamped too
+	assert.Equal(t, referenceTime.Add(30*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-m", ScheduledAt: day(17)}].FinishTime)
+	// T@22 is held back by B@21 and M@17 (both clamped to 23:30), so it finishes at 23:30 + duration
+	assert.Equal(t, referenceTime.Add(60*time.Minute), jobRunExpectedFinishTime[scheduler.JobSchedule{JobName: "job-t", ScheduledAt: day(22)}].FinishTime)
 }

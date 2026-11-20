@@ -482,16 +482,18 @@ func (p *Publisher) schedulerDelayBudget(depth int) int64 {
 func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev TargetEvaluation, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	inducedByProject := map[tenant.ProjectName]time.Duration{}
 	var individuallyDelayed []jobDelay
+	observations := make(map[*scheduler.JobExecutionSummary]runtimeObservation, len(path))
 
 	for _, node := range path {
-		induced := inducedRuntimeDelay(node, ev.HistoricalByJob, ev.ReferenceTime)
-		if induced <= 0 {
+		obs := observeRuntime(node, ev.HistoricalByJob, ev.ReferenceTime)
+		observations[node] = obs
+		if obs.Induced <= 0 {
 			continue
 		}
-		inducedByProject[node.ProjectName] += induced
+		inducedByProject[node.ProjectName] += obs.Induced
 
-		if induced > p.config.RuntimeDelayThreshold {
-			individuallyDelayed = append(individuallyDelayed, jobDelay{node: node, induced: induced})
+		if obs.Induced > p.config.RuntimeDelayThreshold {
+			individuallyDelayed = append(individuallyDelayed, jobDelay{node: node, induced: obs.Induced})
 		}
 	}
 
@@ -509,6 +511,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				InducedDelaySeconds: int(delayed.induced.Seconds()),
 				IsJobFinished:       delayed.node.JobRunSummary.IsFinished(),
 				DelayScope:          scheduler.DelayScopeJob,
+				Evidence:            runtimeJobEvidence(delayed.node, observations[delayed.node], ev.ReferenceTime, p.config.RuntimeDelayThreshold),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -554,11 +557,84 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				IsJobFinished:              maxNode.JobRunSummary.IsFinished(),
 				DelayScope:                 scheduler.DelayScopeProject,
 				MaxNodeInducedDelaySeconds: int(maxJobDelay.Seconds()),
+				Evidence:                   runtimeProjectEvidence(path, observations, maxProject, maxNode, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
 			},
 			ImpactedJobs: impacted,
 		})
 	}
 	return detections
+}
+
+// runtimeJobEvidence records a single-job runtime measurement: the observed runtime with
+// its start/end sources and the baseline it was compared against.
+func runtimeJobEvidence(node *scheduler.JobExecutionSummary, obs runtimeObservation, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
+	return &scheduler.ReasonEvidence{
+		ReferenceTime:    referenceTime.UTC(),
+		Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
+		ThresholdSeconds: int(threshold.Seconds()),
+		Runtime: &scheduler.RuntimeEvidence{
+			CalculationComponentsTotal: 1,
+			CalculationComponents:      []scheduler.RuntimeComponent{runtimeComponent(node, obs)},
+		},
+	}
+}
+
+// runtimeProjectEvidence records a project-level runtime roll-up: every project job on
+// the path that contributed to the sum, plus the jobs skipped for having no baseline.
+func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations map[*scheduler.JobExecutionSummary]runtimeObservation, projectName tenant.ProjectName, maxNode *scheduler.JobExecutionSummary, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
+	var components []scheduler.RuntimeComponent
+	var skippedNoBaseline []string
+	for _, node := range path {
+		if node.ProjectName != projectName {
+			continue
+		}
+		obs := observations[node]
+		if obs.TaskStart == nil {
+			continue // never started: no runtime to measure
+		}
+		if !obs.BaselineFound {
+			skippedNoBaseline = append(skippedNoBaseline, node.ProjectName.String()+"/"+node.JobName.String())
+			continue
+		}
+		if obs.Induced <= 0 {
+			continue // within its baseline: contributes nothing to the sum
+		}
+		components = append(components, runtimeComponent(node, obs))
+	}
+	sort.Strings(skippedNoBaseline)
+	if len(skippedNoBaseline) > scheduler.MaxEvidenceComponents {
+		skippedNoBaseline = skippedNoBaseline[:scheduler.MaxEvidenceComponents]
+	}
+	capped, componentsTotal := scheduler.CapComponents(components)
+
+	return &scheduler.ReasonEvidence{
+		ReferenceTime:    referenceTime.UTC(),
+		Rule:             scheduler.EvidenceRuleRuntimeProjectSumOverThreshold,
+		ThresholdSeconds: int(threshold.Seconds()),
+		Runtime: &scheduler.RuntimeEvidence{
+			MaxNode:                    projectName.String() + "/" + maxNode.JobName.String(),
+			CalculationComponentsTotal: componentsTotal,
+			CalculationComponents:      capped,
+			SkippedNoBaseline:          skippedNoBaseline,
+		},
+	}
+}
+
+// runtimeComponent is one job's runtime measurement as an evidence component.
+func runtimeComponent(node *scheduler.JobExecutionSummary, obs runtimeObservation) scheduler.RuntimeComponent {
+	return scheduler.RuntimeComponent{
+		ComponentBase: scheduler.ComponentBase{
+			Project:        node.ProjectName.String(),
+			Job:            node.JobName.String(),
+			InducedSeconds: int(obs.Induced.Seconds()),
+			ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
+		},
+		TaskStart:       obs.TaskStart,
+		End:             scheduler.TimePtr(obs.End),
+		EndSource:       obs.EndSource,
+		ObservedSeconds: scheduler.IntPtr(int(obs.Observed.Seconds())),
+		BaselineSeconds: scheduler.IntPtr(int(obs.Baseline.Seconds())),
+	}
 }
 
 type jobDelay = struct {
@@ -583,7 +659,7 @@ type runtimeObservation struct {
 // A job whose baseline is missing (or zero, which is unusable data) is skipped: no induced delay is attributed to it.
 func observeRuntime(node *scheduler.JobExecutionSummary, historicalByJob map[scheduler.JobName]time.Duration, referenceTime time.Time) runtimeObservation {
 	run := node.JobRunSummary
-	obs := runtimeObservation{EndSource: "reference_time"}
+	obs := runtimeObservation{EndSource: scheduler.EvidenceSourceReferenceTime}
 	if run.TaskStartTime == nil {
 		return obs
 	}
@@ -591,7 +667,7 @@ func observeRuntime(node *scheduler.JobExecutionSummary, historicalByJob map[sch
 	obs.End = referenceTime
 	if actualEnd := run.GetActualEndTime(); actualEnd != nil {
 		obs.End = *actualEnd
-		obs.EndSource = "actual_end"
+		obs.EndSource = scheduler.EvidenceSourceActualEnd
 	}
 	obs.Observed = obs.End.Sub(*run.TaskStartTime)
 	baseline, found := historicalByJob[node.JobName]

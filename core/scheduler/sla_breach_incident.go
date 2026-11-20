@@ -63,8 +63,202 @@ type RootCauseReasonDetail struct {
 	// correctly reads as "was still running when last seen".
 	IsJobFinished bool   `json:"is_job_finished,omitempty"`
 	DelayScope    string `json:"delay_scope,omitempty"`
-	// MaxNodeInducedDelaySeconds is the representative job's own induced delay for job-scoped runtime reason
+	// MaxNodeInducedDelaySeconds is the representative job's own induced delay for a
+	// project-scoped runtime reason
 	MaxNodeInducedDelaySeconds int `json:"max_node_induced_delay_seconds,omitempty"`
+	// Evidence records how InducedDelaySeconds was calculated.
+	// Optional and absent on older rows; never sent to alerting.
+	Evidence *ReasonEvidence `json:"evidence,omitempty"`
+}
+
+// Evidence rule names: which detector produced the reason and under which condition.
+const (
+	EvidenceRuleRuntimeJobOverThreshold        = "runtime_job_over_threshold"
+	EvidenceRuleRuntimeProjectSumOverThreshold = "runtime_project_sum_over_threshold"
+	EvidenceRuleSchedulerPathOverBudget        = "scheduler_path_over_budget"
+	EvidenceRuleThirdPartyWaitOverThreshold    = "third_party_wait_over_threshold"
+	EvidenceRuleWaitingUpstreamPastSafeStart   = "waiting_upstream_past_safe_start"
+	EvidenceRuleAggressiveSLANoCause           = "aggressive_sla_no_cause"
+)
+
+const (
+	// MaxEvidenceComponents caps the calculation component list stored per reason;
+	// components beyond the cap are dropped but counted in CalculationComponentsTotal.
+	// The list is sorted largest first, so the cap keeps the biggest contributors.
+	MaxEvidenceComponents = 20
+)
+
+// Source markers for evidence times: which candidate supplied a start or end.
+const (
+	EvidenceSourceActualEnd       = "actual_end"
+	EvidenceSourceReferenceTime   = "reference_time"
+	EvidenceSourceWaitEnd         = "wait_end"
+	EvidenceSourceScheduledAt     = "scheduled_at"
+	EvidenceSourceUpstreamEnd     = "upstream_end"
+	EvidenceSourceDailyBoundary   = "daily_boundary"
+	EvidenceSourceSensorWaitStart = "sensor_wait_start"
+)
+
+// ReasonEvidence is the calculation record of one reason's induced delay.
+// Exactly one reason section is filled — the one matching the rule — and the
+// other sections stay nil. FAILED_UPSTREAM has no rule of its own and carries
+// no section.
+type ReasonEvidence struct {
+	ReferenceTime time.Time `json:"reference_time"`
+	// Rule names the detector that produced the reason and the condition it fired on.
+	Rule string `json:"rule,omitempty"`
+	// ThresholdSeconds is the minimum the measured delay must exceed before the
+	// reason fires. For the runtime reasons it is the configured minimum delay;
+	// for the scheduler reason it is the measured path's allowance: the
+	// per-depth minutes scaled by the number of measured nodes.
+	ThresholdSeconds int `json:"threshold_seconds,omitempty"`
+
+	Runtime         *RuntimeEvidence         `json:"runtime,omitempty"`
+	Scheduler       *SchedulerEvidence       `json:"scheduler,omitempty"`
+	ThirdParty      *ThirdPartyEvidence      `json:"third_party,omitempty"`
+	WaitingUpstream *WaitingUpstreamEvidence `json:"waiting_upstream,omitempty"`
+	AggressiveSLA   *AggressiveSLAEvidence   `json:"aggressive_sla,omitempty"`
+}
+
+// ComponentBase is the part every component kind shares. It is embedded, so its
+// fields appear flat inside each component object in the stored JSON.
+type ComponentBase struct {
+	Project string `json:"project"`
+	Job     string `json:"job"`
+	// InducedSeconds is this job's contribution to the reason's induced delay.
+	InducedSeconds int        `json:"induced_seconds"`
+	ScheduledAt    *time.Time `json:"scheduled_at,omitempty"`
+}
+
+// evidenceSort exposes the shared keys CapComponents orders components by.
+type evidenceSort interface {
+	evidenceSortKey() (inducedSeconds int, project, job string)
+}
+
+func (c ComponentBase) evidenceSortKey() (int, string, string) {
+	return c.InducedSeconds, c.Project, c.Job
+}
+
+// RuntimeComponent is one job's runtime measurement: the observed runtime with
+// its start/end sources and the baseline it was compared against.
+type RuntimeComponent struct {
+	ComponentBase
+	TaskStart *time.Time `json:"task_start,omitempty"`
+	End       *time.Time `json:"end,omitempty"`
+	// EndSource marks what End is: the run's actual end, or the reference time
+	// while the run was still going.
+	EndSource       string `json:"end_source,omitempty"`
+	ObservedSeconds *int   `json:"observed_seconds,omitempty"`
+	BaselineSeconds *int   `json:"baseline_seconds,omitempty"`
+}
+
+// SchedulerComponent is one measured node's scheduler-owned wait: which upstream
+// end (or the node's own schedule) it was measured from, and when the task started.
+type SchedulerComponent struct {
+	ComponentBase
+	TaskStart *time.Time `json:"task_start,omitempty"`
+	// UpstreamJob and UpstreamEnd identify the latest-finished upstream whose end
+	// the wait was measured from; empty when the node had no finished upstream.
+	UpstreamJob string     `json:"upstream_job,omitempty"`
+	UpstreamEnd *time.Time `json:"upstream_end,omitempty"`
+	// WaitFrom is when the node could have started; WaitFromSource marks which
+	// candidate supplied it (its own schedule or the upstream end).
+	WaitFrom       *time.Time `json:"wait_from,omitempty"`
+	WaitFromSource string     `json:"wait_from_source,omitempty"`
+}
+
+// RuntimeEvidence backs the runtime reasons: a single job over the threshold, or
+// a project whose summed induced delay crossed it.
+type RuntimeEvidence struct {
+	// MaxNode names the project's max-delay job for a project-scoped reason.
+	MaxNode                    string             `json:"max_node,omitempty"`
+	CalculationComponentsTotal int                `json:"calculation_components_total,omitempty"`
+	CalculationComponents      []RuntimeComponent `json:"calculation_components,omitempty"`
+	// SkippedNoBaseline lists the project's jobs that could not be measured
+	// because they have no usable baseline.
+	SkippedNoBaseline []string `json:"skipped_no_baseline,omitempty"`
+}
+
+// SchedulerEvidence backs the scheduler reason: the summed scheduling waits of
+// the measured path.
+type SchedulerEvidence struct {
+	CalculationComponentsTotal int                  `json:"calculation_components_total,omitempty"`
+	CalculationComponents      []SchedulerComponent `json:"calculation_components,omitempty"`
+}
+
+// ThirdPartyEvidence backs the third-party reason: a single sensor wait, so
+// there is no component list.
+type ThirdPartyEvidence struct {
+	Sensor   string    `json:"sensor,omitempty"`
+	Boundary time.Time `json:"boundary,omitempty"`
+	// WaitFrom is when the sensor could have started; WaitFromSource marks which
+	// candidate supplied it (the sensor's wait start or the daily boundary).
+	WaitFrom       time.Time `json:"wait_from,omitempty"`
+	WaitFromSource string    `json:"wait_from_source,omitempty"`
+	End            time.Time `json:"end,omitempty"`
+	// EndSource marks what End is: the wait's end, or the reference time while
+	// the sensor was still waiting.
+	EndSource string `json:"end_source,omitempty"`
+}
+
+// WaitingUpstreamEvidence backs the waiting-upstream reason: the facts behind a
+// stuck node. Its induced delay is the node's own overdue time past LatestSafeStart.
+type WaitingUpstreamEvidence struct {
+	// NodeState is the stuck node's own state: waiting on its upstream, or an
+	// expected run that was never created.
+	NodeState                string     `json:"node_state,omitempty"`
+	InferredSLA              *time.Time `json:"inferred_sla,omitempty"`
+	EstimatedDurationSeconds *int       `json:"estimated_duration_seconds,omitempty"`
+	LatestSafeStart          *time.Time `json:"latest_safe_start,omitempty"`
+	// HasMissingUpstreamRun is true when at least one upstream run was never
+	// created; false means every upstream succeeded and the node still did not
+	// start, pointing at a scheduling or trigger gap.
+	HasMissingUpstreamRun bool `json:"has_missing_upstream_run,omitempty"`
+}
+
+// AggressiveSLAEvidence backs the aggressive-SLA reason: the target is past its
+// SLA with no cause explaining it, so the facts show the deadline it missed and
+// how the run went against its baseline.
+type AggressiveSLAEvidence struct {
+	// TargetSLATime is the impacted target's own SLA deadline
+	// (scheduled_at plus its SLA duration) — the time it breached.
+	TargetSLATime time.Time `json:"target_sla_time,omitempty"`
+	// End is when the run ended; while it is still running or has not started,
+	// it is the reference time instead.
+	End       *time.Time `json:"end,omitempty"`
+	EndSource string     `json:"end_source,omitempty"`
+	// LateBySeconds is how late the run is past the target SLA: the actual end
+	// minus the deadline, or the reference time minus the deadline while the
+	// run has not finished.
+	LateBySeconds   int        `json:"late_by_seconds,omitempty"`
+	TaskStart       *time.Time `json:"task_start,omitempty"`
+	BaselineSeconds *int       `json:"baseline_seconds,omitempty"`
+}
+
+func TimePtr(t time.Time) *time.Time { return &[]time.Time{t.UTC()}[0] }
+
+func IntPtr(v int) *int { return &v }
+
+// CapComponents sorts components by induced delay (largest first, ties by project
+// then job) and truncates the list to MaxEvidenceComponents, reporting the pre-cap
+// count. It works for any component kind sharing ComponentBase.
+func CapComponents[T evidenceSort](components []T) ([]T, int) {
+	total := len(components)
+	sort.SliceStable(components, func(i, j int) bool {
+		aInduced, aProject, aJob := components[i].evidenceSortKey()
+		bInduced, bProject, bJob := components[j].evidenceSortKey()
+		if aInduced != bInduced {
+			return aInduced > bInduced
+		}
+		if aProject != bProject {
+			return aProject < bProject
+		}
+		return aJob < bJob
+	})
+	if total > MaxEvidenceComponents {
+		components = components[:MaxEvidenceComponents]
+	}
+	return components, total
 }
 
 type RootCauseDetails struct {
@@ -143,7 +337,16 @@ func GroupDetections(detections []RootCauseDetection) []*SLABreachIncidentWithIm
 			}
 			slot := &incident.Details.Reasons[j]
 			if detection.Reason.InducedDelaySeconds > slot.InducedDelaySeconds {
-				slot.InducedDelaySeconds = detection.Reason.InducedDelaySeconds
+				winner := detection.Reason
+				slot.InducedDelaySeconds = winner.InducedDelaySeconds
+				slot.IsJobFinished = winner.IsJobFinished
+				slot.DelayScope = winner.DelayScope
+				slot.MaxNodeInducedDelaySeconds = winner.MaxNodeInducedDelaySeconds
+				slot.Evidence = winner.Evidence
+			} else if detection.Reason.InducedDelaySeconds == slot.InducedDelaySeconds && slot.Evidence == nil {
+				// equal numbers: keep the first evidence when the slot has one,
+				// else adopt the incoming one
+				slot.Evidence = detection.Reason.Evidence
 			}
 			if len(detection.Reason.BlockedOnSensors) > 0 {
 				slot.BlockedOnSensors = detection.Reason.BlockedOnSensors

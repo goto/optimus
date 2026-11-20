@@ -1,6 +1,7 @@
 package rootcause_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -148,6 +149,56 @@ func TestPublisher_Evaluate(t *testing.T) {
 		assert.True(t, matched[0].Reason.IsJobFinished, "the offending run has finished")
 		assert.Equal(t, scheduler.ReasonStatusActive, matched[0].Reason.Status)
 		assert.Equal(t, "job_target", matched[0].ImpactedJobs[0].JobName.String())
+
+		// the evidence shows exactly how the 35m was calculated:
+		// 45m observed (start 09:00, actual end 09:45) minus the 10m baseline
+		evidence := matched[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, scheduler.EvidenceRuleRuntimeJobOverThreshold, evidence.Rule)
+		assert.Equal(t, referenceTime.UTC(), evidence.ReferenceTime)
+		assert.Equal(t, int((30 * time.Minute).Seconds()), evidence.ThresholdSeconds)
+		runtime := evidence.Runtime
+		assert.NotNil(t, runtime)
+		assert.Len(t, runtime.CalculationComponents, 1)
+		component := runtime.CalculationComponents[0]
+		assert.Equal(t, "p_root", component.Project)
+		assert.Equal(t, "job_upstream", component.Job)
+		assert.Equal(t, int(35*time.Minute/time.Second), component.InducedSeconds)
+		assert.Equal(t, testBaseTime.Add(-time.Hour).UTC(), *component.TaskStart)
+		assert.Equal(t, testBaseTime.Add(-15*time.Minute).UTC(), *component.End)
+		assert.Equal(t, scheduler.EvidenceSourceActualEnd, component.EndSource)
+		assert.Equal(t, int(45*time.Minute/time.Second), *component.ObservedSeconds)
+		assert.Equal(t, int(10*time.Minute/time.Second), *component.BaselineSeconds)
+		assert.Nil(t, evidence.Scheduler, "a job-scoped reason fills only its own section")
+	})
+
+	t.Run("a job without a baseline is skipped instead of counting its whole runtime", func(t *testing.T) {
+		// the upstream ran 45m but has no baseline entry: with nothing to compare
+		// against, its whole runtime must not read as induced delay
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-15*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		historical := map[scheduler.JobName]time.Duration{"job_target": targetBaseline}
+
+		detections := eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// a zero baseline is unusable data and skips the job the same way
+		historical["job_upstream"] = 0
+		detections = eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay))
+
+		// the same run with a real baseline is measured again
+		historical["job_upstream"] = 10 * time.Minute
+		detections = eval(target, historical, referenceTime)
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.Equal(t, "job_upstream", matched[0].IncidentKey.JobName.String())
+		assert.Equal(t, int(35*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds)
 	})
 
 	t.Run("a job without a baseline is skipped instead of counting its whole runtime", func(t *testing.T) {
@@ -224,6 +275,90 @@ func TestPublisher_Evaluate(t *testing.T) {
 		// thresholds and suppression keep reading the project total
 		assert.Equal(t, scheduler.DelayScopeProject, projectDetection.Reason.DelayScope)
 		assert.Equal(t, int(24*time.Minute/time.Second), projectDetection.Reason.MaxNodeInducedDelaySeconds)
+
+		// the evidence decomposes the 43m project total into its two contributing jobs
+		projectEvidence := projectDetection.Reason.Evidence
+		assert.NotNil(t, projectEvidence)
+		assert.Equal(t, scheduler.EvidenceRuleRuntimeProjectSumOverThreshold, projectEvidence.Rule)
+		projectRuntime := projectEvidence.Runtime
+		assert.NotNil(t, projectRuntime)
+		assert.Equal(t, "p_a/job_a2", projectRuntime.MaxNode)
+		assert.Equal(t, 2, projectRuntime.CalculationComponentsTotal)
+		assert.Len(t, projectRuntime.CalculationComponents, 2)
+		// sorted largest first
+		assert.Equal(t, "job_a2", projectRuntime.CalculationComponents[0].Job)
+		assert.Equal(t, int(24*time.Minute/time.Second), projectRuntime.CalculationComponents[0].InducedSeconds)
+		assert.Equal(t, "job_a1", projectRuntime.CalculationComponents[1].Job)
+		assert.Equal(t, int(19*time.Minute/time.Second), projectRuntime.CalculationComponents[1].InducedSeconds)
+		assert.Empty(t, projectRuntime.SkippedNoBaseline)
+	})
+
+	t.Run("project evidence lists the jobs skipped for having no baseline", func(t *testing.T) {
+		// chain target <- a1(p_a) <- a2(p_a, no baseline) <- a3(p_a); a1 and a3 induce
+		// 20m each (sum 40m, over the threshold), while a2 ran 5h with no baseline and
+		// must be skipped, not counted at full length
+		a1Run := makeRun("job_a1", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-30*time.Minute)), "success")
+		a2Run := makeRun("job_a2", testBaseTime.Add(-2*time.Hour),
+			ptr(testBaseTime.Add(-2*time.Hour)), nil, "running")
+		a3Run := makeRun("job_a3", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), ptr(testBaseTime.Add(-30*time.Minute)), "success")
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_a1", tenantProjA, a1Run,
+				makeLineage("job_a2", tenantProjA, a2Run,
+					makeLineage("job_a3", tenantProjA, a3Run))))
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_target": targetBaseline,
+			"job_a1":     10 * time.Minute,
+			"job_a3":     10 * time.Minute,
+		}
+
+		detections := eval(target, historical, referenceTime)
+
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1, "no job crosses the threshold alone; the project sum does")
+		assert.Equal(t, int(40*time.Minute/time.Second), matched[0].Reason.InducedDelaySeconds) // project total
+		evidence := matched[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, 2, evidence.Runtime.CalculationComponentsTotal)
+		assert.Len(t, evidence.Runtime.CalculationComponents, 2)
+		assert.Equal(t, []string{"p_a/job_a2"}, evidence.Runtime.SkippedNoBaseline,
+			"the no-baseline job is reported as skipped, not counted at full length")
+	})
+
+	t.Run("project evidence caps its components at twenty", func(t *testing.T) {
+		// 25 upstreams of one project each induce 5m: no individual detection, the 125m
+		// flat sum fires once, and the evidence keeps the 20 biggest contributors
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		node := makeLineage("job_target", testTenant, targetRun)
+		historical := map[scheduler.JobName]time.Duration{"job_target": targetBaseline}
+		for i := 1; i <= 25; i++ {
+			upstreamName := scheduler.JobName(fmt.Sprintf("job_u%02d", i))
+			upstreamRun := makeRun(upstreamName, testBaseTime.Add(-2*time.Hour),
+				ptr(testBaseTime.Add(-2*time.Hour)), ptr(testBaseTime.Add(-2*time.Hour+35*time.Minute)), "success")
+			node = makeLineage(upstreamName, tenantProjA, upstreamRun, node)
+			historical[upstreamName] = 30 * time.Minute
+		}
+
+		detections := eval(node, historical, referenceTime)
+
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.Equal(t, scheduler.DelayScopeProject, matched[0].Reason.DelayScope)
+		evidence := matched[0].Reason.Evidence
+		assert.NotNil(t, evidence)
+		assert.Equal(t, 25, evidence.Runtime.CalculationComponentsTotal)
+		assert.Len(t, evidence.Runtime.CalculationComponents, scheduler.MaxEvidenceComponents)
+		// deterministic order: largest first, ties by job name
+		assert.Equal(t, "job_u01", evidence.Runtime.CalculationComponents[0].Job)
+		assert.Equal(t, "job_u20", evidence.Runtime.CalculationComponents[len(evidence.Runtime.CalculationComponents)-1].Job)
+		for _, component := range evidence.Runtime.CalculationComponents {
+			assert.Equal(t, int(5*time.Minute/time.Second), component.InducedSeconds)
+		}
 	})
 
 	t.Run("scheduler delay is the critical path's summed wait against the depth budget", func(t *testing.T) {

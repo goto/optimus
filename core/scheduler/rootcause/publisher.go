@@ -98,8 +98,10 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 	detections := p.tierFailedUpstream(walk, impacted)
 	detections = append(detections, p.tierWaitingUpstream(walk, ev.Finding, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierThirdPartyDelay(chain, ev.ReferenceTime, impacted)...)
-	detections = append(detections, p.tierSchedulerDelay(walk, ev.ReferenceTime, impacted)...)
+	detections = append(detections, p.tierSchedulerDelay(walk, ev.Finding, ev.ReferenceTime, impacted)...)
 	detections = append(detections, p.tierRuntimeDelay(chain, ev, impacted)...)
+
+	sources := breachSourcesEvidence(ev)
 
 	// if nothing explains the breach, the SLA is too aggressive for what the lineage
 	// delivers — but only when the target is past its SLA and is itself the only breach
@@ -109,7 +111,7 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 		if !breachedSLA(targetRun, ev.ReferenceTime) || len(ev.Finding.Origins) != 1 || ev.Finding.Origins[0].JobName != ev.Target.JobName {
 			return nil
 		}
-		return []scheduler.RootCauseDetection{{
+		detections = []scheduler.RootCauseDetection{{
 			IncidentKey: incidentKey(targetNode.ProjectName, targetNode.JobName, targetRun.ScheduledAt),
 			Reason: scheduler.RootCauseReasonDetail{
 				Reason:   scheduler.TierAggressiveSLA,
@@ -119,7 +121,78 @@ func (p *Publisher) Evaluate(ev TargetEvaluation) []scheduler.RootCauseDetection
 			ImpactedJobs: impacted,
 		}}
 	}
+	attachBreachSources(detections, sources, ev.ReferenceTime)
 	return detections
+}
+
+// breachSourcesEvidence records the inferred-SLA breach sources of the impacted target
+// behind this detection: which job is breaching its inferred SLA, around what time it
+// crossed (its inferred deadline, or its latest safe start when it never started), at
+// which level relative to the target, and the source→target chain for level-by-level
+// tracing.
+func breachSourcesEvidence(ev TargetEvaluation) []scheduler.EvidenceBreachSource {
+	finding := ev.Finding
+	if finding == nil || len(finding.Origins) == 0 {
+		return nil
+	}
+	sources := make([]scheduler.EvidenceBreachSource, 0, len(finding.Origins))
+	for i, state := range finding.Origins {
+		source := scheduler.EvidenceBreachSource{
+			Project:     state.Tenant.ProjectName().String(),
+			Job:         state.JobName.String(),
+			ScheduledAt: scheduler.TimePtr(state.JobRun.ScheduledAt),
+			Level:       finding.Bottleneck.Level[state.JobName],
+			Status:      string(state.Status),
+			InferredSLA: state.InferredSLA,
+		}
+		if state.Status == scheduler.SLABreachCauseNotStarted {
+			source.LatestSafeStart = state.Evidence.LatestSafeStartAt
+		}
+		if state.EstimatedDuration != nil {
+			source.EstimatedDurationSeconds = scheduler.IntPtr(int(state.EstimatedDuration.Seconds()))
+		}
+		if i < len(finding.OriginPaths) && finding.OriginPaths[i] != nil {
+			source.Chain = chainEvidence(finding, finding.OriginPaths[i])
+		}
+		sources = append(sources, source)
+	}
+	return sources
+}
+
+// chainEvidence reverses the target→origin path into an origin→target trace with each
+// node's target-relative level and inferred SLA, keeping the origin side when capping.
+func chainEvidence(finding *BreachFinding, path []*scheduler.JobState) []scheduler.EvidenceChainNode {
+	chain := make([]scheduler.EvidenceChainNode, 0, len(path))
+	for i := len(path) - 1; i >= 0; i-- {
+		state := path[i]
+		if state == nil {
+			continue
+		}
+		chain = append(chain, scheduler.EvidenceChainNode{
+			Project:     state.Tenant.ProjectName().String(),
+			Job:         state.JobName.String(),
+			Level:       finding.Bottleneck.Level[state.JobName],
+			InferredSLA: state.InferredSLA,
+		})
+	}
+	if len(chain) > scheduler.MaxEvidenceComponents {
+		chain = chain[:scheduler.MaxEvidenceComponents]
+	}
+	return chain
+}
+
+// attachBreachSources records the breach sources block on every detection's evidence,
+// so each stored reason explains which job breached the inferred SLA, at which level,
+// and around when.
+func attachBreachSources(detections []scheduler.RootCauseDetection, sources []scheduler.EvidenceBreachSource, referenceTime time.Time) {
+	for i := range detections {
+		if detections[i].Reason.Evidence == nil {
+			detections[i].Reason.Evidence = &scheduler.ReasonEvidence{
+				ReferenceTime: referenceTime.UTC(),
+			}
+		}
+		detections[i].Reason.Evidence.BreachSources = sources
+	}
 }
 
 // aggressiveSLAEvidence records the facts behind an AGGRESSIVE_SLA finding: the target
@@ -496,7 +569,7 @@ func (p *Publisher) matchThirdPartySensor(sensorName string) string {
 // ExecutionSummary fills for finished gating paths) with the same formula the summary
 // uses: the wait from the later of the node's schedule and its latest-finished upstream's
 // end until the task start.
-func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
+func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, finding *BreachFinding, referenceTime time.Time, impacted []scheduler.ImpactedJob) []scheduler.RootCauseDetection {
 	gatingPath := walk.GatingPath()
 	if len(gatingPath) == 0 {
 		return nil
@@ -526,7 +599,7 @@ func (p *Publisher) tierSchedulerDelay(walk *scheduler.LineageWalkResult, refere
 	for _, node := range measured {
 		obs := observeScheduling(walk, node)
 		total += obs.Delay
-		components = append(components, schedulingComponent(node, obs))
+		components = append(components, schedulingComponent(node, obs, finding))
 	}
 	budget := time.Duration(p.schedulerDelayBudget(len(measured))) * time.Second
 	if total <= budget {
@@ -599,14 +672,9 @@ func observeScheduling(walk *scheduler.LineageWalkResult, node *scheduler.JobExe
 
 // schedulingComponent is one measured node's scheduler wait as an evidence component;
 // zero-wait nodes are kept (they still count toward the depth budget).
-func schedulingComponent(node *scheduler.JobExecutionSummary, obs schedulingObservation) scheduler.SchedulerComponent {
+func schedulingComponent(node *scheduler.JobExecutionSummary, obs schedulingObservation, finding *BreachFinding) scheduler.SchedulerComponent {
 	component := scheduler.SchedulerComponent{
-		ComponentBase: scheduler.ComponentBase{
-			Project:        node.ProjectName.String(),
-			Job:            node.JobName.String(),
-			InducedSeconds: int(obs.Delay.Seconds()),
-			ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
-		},
+		ComponentBase: componentBase(node, int(obs.Delay.Seconds()), finding),
 	}
 	if node.JobRunSummary.TaskStartTime != nil {
 		component.TaskStart = node.JobRunSummary.TaskStartTime
@@ -666,7 +734,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				InducedDelaySeconds: int(delayed.induced.Seconds()),
 				IsJobFinished:       delayed.node.JobRunSummary.IsFinished(),
 				DelayScope:          scheduler.DelayScopeJob,
-				Evidence:            runtimeJobEvidence(delayed.node, observations[delayed.node], ev.ReferenceTime, p.config.RuntimeDelayThreshold),
+				Evidence:            runtimeJobEvidence(delayed.node, observations[delayed.node], ev.Finding, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -712,7 +780,7 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 				IsJobFinished:              maxNode.JobRunSummary.IsFinished(),
 				DelayScope:                 scheduler.DelayScopeProject,
 				MaxNodeInducedDelaySeconds: int(maxJobDelay.Seconds()),
-				Evidence:                   runtimeProjectEvidence(path, observations, maxProject, maxNode, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
+				Evidence:                   runtimeProjectEvidence(path, observations, maxProject, maxNode, ev.Finding, ev.ReferenceTime, p.config.RuntimeDelayThreshold),
 			},
 			ImpactedJobs: impacted,
 		})
@@ -722,21 +790,21 @@ func (p *Publisher) tierRuntimeDelay(path []*scheduler.JobExecutionSummary, ev T
 
 // runtimeJobEvidence records a single-job runtime measurement: the observed runtime with
 // its start/end sources and the baseline it was compared against.
-func runtimeJobEvidence(node *scheduler.JobExecutionSummary, obs runtimeObservation, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
+func runtimeJobEvidence(node *scheduler.JobExecutionSummary, obs runtimeObservation, finding *BreachFinding, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
 	return &scheduler.ReasonEvidence{
 		ReferenceTime:    referenceTime.UTC(),
 		Rule:             scheduler.EvidenceRuleRuntimeJobOverThreshold,
 		ThresholdSeconds: int(threshold.Seconds()),
 		Runtime: &scheduler.RuntimeEvidence{
 			CalculationComponentsTotal: 1,
-			CalculationComponents:      []scheduler.RuntimeComponent{runtimeComponent(node, obs)},
+			CalculationComponents:      []scheduler.RuntimeComponent{runtimeComponent(node, obs, finding)},
 		},
 	}
 }
 
 // runtimeProjectEvidence records a project-level runtime roll-up: every project job on
 // the path that contributed to the sum, plus the jobs skipped for having no baseline.
-func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations map[*scheduler.JobExecutionSummary]runtimeObservation, projectName tenant.ProjectName, maxNode *scheduler.JobExecutionSummary, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
+func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations map[*scheduler.JobExecutionSummary]runtimeObservation, projectName tenant.ProjectName, maxNode *scheduler.JobExecutionSummary, finding *BreachFinding, referenceTime time.Time, threshold time.Duration) *scheduler.ReasonEvidence {
 	var components []scheduler.RuntimeComponent
 	var skippedNoBaseline []string
 	for _, node := range path {
@@ -754,7 +822,7 @@ func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations 
 		if obs.Induced <= 0 {
 			continue // within its baseline: contributes nothing to the sum
 		}
-		components = append(components, runtimeComponent(node, obs))
+		components = append(components, runtimeComponent(node, obs, finding))
 	}
 	sort.Strings(skippedNoBaseline)
 	if len(skippedNoBaseline) > scheduler.MaxEvidenceComponents {
@@ -775,15 +843,33 @@ func runtimeProjectEvidence(path []*scheduler.JobExecutionSummary, observations 
 	}
 }
 
+// componentBase builds the shared part of a calculation component: the job, its
+// contribution, and where it sits relative to the target — its level and whether the
+// job is itself one of the breach sources.
+func componentBase(node *scheduler.JobExecutionSummary, inducedSeconds int, finding *BreachFinding) scheduler.ComponentBase {
+	base := scheduler.ComponentBase{
+		Project:        node.ProjectName.String(),
+		Job:            node.JobName.String(),
+		InducedSeconds: inducedSeconds,
+		ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
+	}
+	if finding == nil {
+		return base
+	}
+	base.Level = finding.Bottleneck.Level[node.JobName]
+	for _, state := range finding.Origins {
+		if state.JobName == node.JobName {
+			base.IsBreachSource = true
+			break
+		}
+	}
+	return base
+}
+
 // runtimeComponent is one job's runtime measurement as an evidence component.
-func runtimeComponent(node *scheduler.JobExecutionSummary, obs runtimeObservation) scheduler.RuntimeComponent {
+func runtimeComponent(node *scheduler.JobExecutionSummary, obs runtimeObservation, finding *BreachFinding) scheduler.RuntimeComponent {
 	return scheduler.RuntimeComponent{
-		ComponentBase: scheduler.ComponentBase{
-			Project:        node.ProjectName.String(),
-			Job:            node.JobName.String(),
-			InducedSeconds: int(obs.Induced.Seconds()),
-			ScheduledAt:    scheduler.TimePtr(node.JobRunSummary.ScheduledAt),
-		},
+		ComponentBase:   componentBase(node, int(obs.Induced.Seconds()), finding),
 		TaskStart:       obs.TaskStart,
 		End:             scheduler.TimePtr(obs.End),
 		EndSource:       obs.EndSource,

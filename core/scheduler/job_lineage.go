@@ -728,16 +728,24 @@ type JobRunSummary struct {
 // again after a clear/rerun) must never activate the stale dag-run end, so it returns nil
 // in that case.
 func (j *JobRunSummary) GetActualEndTime() *time.Time {
+	end, _ := j.ActualEndTimeWithSource()
+	return end
+}
+
+// ActualEndTimeWithSource returns the run's end time together with the evidence label of
+// where it came from: an operator end (task or hook), or the dag-run end used when the
+// task/hook end callback was lost. The source is "" when the run has no end yet.
+func (j *JobRunSummary) ActualEndTimeWithSource() (*time.Time, string) {
 	if j.HookEndTime != nil {
-		return j.HookEndTime
+		return j.HookEndTime, EvidenceSourceActualEnd
 	}
 	if j.TaskEndTime != nil {
-		return j.TaskEndTime
+		return j.TaskEndTime, EvidenceSourceActualEnd
 	}
 	if j.JobEndTime != nil && jobStatusIsTerminal(j.JobStatus) {
-		return j.JobEndTime
+		return j.JobEndTime, EvidenceSourceJobRunEnd
 	}
-	return nil
+	return nil, ""
 }
 
 // jobStatusIsTerminal reports whether the stored dag-run status text is success or failed.

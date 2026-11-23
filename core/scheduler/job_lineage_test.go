@@ -965,6 +965,9 @@ func TestJobRunSummary_DagRunEndFallback(t *testing.T) {
 			TaskStartTime: &taskStart,
 		}
 		assert.Equal(t, &jobEnd, run.GetActualEndTime())
+		end, source := run.ActualEndTimeWithSource()
+		assert.Equal(t, &jobEnd, end)
+		assert.Equal(t, scheduler.EvidenceSourceJobRunEnd, source)
 		assert.True(t, run.IsFinished())
 		assert.Equal(t, scheduler.StateSuccess, run.GetState())
 	})
@@ -1042,7 +1045,9 @@ func TestJobRunSummary_DagRunEndFallback(t *testing.T) {
 			TaskStartTime: &taskStart,
 			TaskEndTime:   &taskEnd,
 		}
-		assert.Equal(t, &taskEnd, run.GetActualEndTime())
+		end, source := run.ActualEndTimeWithSource()
+		assert.Equal(t, &taskEnd, end)
+		assert.Equal(t, scheduler.EvidenceSourceActualEnd, source)
 	})
 }
 

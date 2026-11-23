@@ -91,6 +91,7 @@ const (
 // Source markers for evidence times: which candidate supplied a start or end.
 const (
 	EvidenceSourceActualEnd       = "actual_end"
+	EvidenceSourceJobRunEnd       = "job_run_end"
 	EvidenceSourceReferenceTime   = "reference_time"
 	EvidenceSourceWaitEnd         = "wait_end"
 	EvidenceSourceScheduledAt     = "scheduled_at"
@@ -181,8 +182,9 @@ type RuntimeComponent struct {
 	ComponentBase
 	TaskStart *time.Time `json:"task_start,omitempty"`
 	End       *time.Time `json:"end,omitempty"`
-	// EndSource marks what End is: the run's actual end, or the reference time
-	// while the run was still going.
+	// EndSource marks what End is: the run's actual end (task or hook), the dag-run end
+	// standing in for a lost task/hook end callback, or the reference time while the run
+	// was still going.
 	EndSource       string `json:"end_source,omitempty"`
 	ObservedSeconds *int   `json:"observed_seconds,omitempty"`
 	BaselineSeconds *int   `json:"baseline_seconds,omitempty"`

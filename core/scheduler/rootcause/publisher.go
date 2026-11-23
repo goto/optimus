@@ -201,9 +201,9 @@ func attachBreachSources(detections []scheduler.RootCauseDetection, sources []sc
 func aggressiveSLAEvidence(targetNode *scheduler.JobExecutionSummary, targetRun *scheduler.JobRunSummary, ev TargetEvaluation) *scheduler.ReasonEvidence {
 	endTime := ev.ReferenceTime
 	endSource := scheduler.EvidenceSourceReferenceTime
-	if actualEnd := targetRun.GetActualEndTime(); actualEnd != nil {
+	if actualEnd, source := targetRun.ActualEndTimeWithSource(); actualEnd != nil {
 		endTime = *actualEnd
-		endSource = scheduler.EvidenceSourceActualEnd
+		endSource = source
 	}
 	section := &scheduler.AggressiveSLAEvidence{
 		TargetSLATime: *targetRun.SLATime,
@@ -887,7 +887,7 @@ type jobDelay = struct {
 type runtimeObservation struct {
 	TaskStart     *time.Time
 	End           time.Time
-	EndSource     string // "actual_end" | "reference_time"
+	EndSource     string // "actual_end" | "job_run_end" | "reference_time"
 	Observed      time.Duration
 	Baseline      time.Duration
 	BaselineFound bool
@@ -906,9 +906,9 @@ func observeRuntime(node *scheduler.JobExecutionSummary, historicalByJob map[sch
 	}
 	obs.TaskStart = run.TaskStartTime
 	obs.End = referenceTime
-	if actualEnd := run.GetActualEndTime(); actualEnd != nil {
+	if actualEnd, source := run.ActualEndTimeWithSource(); actualEnd != nil {
 		obs.End = *actualEnd
-		obs.EndSource = scheduler.EvidenceSourceActualEnd
+		obs.EndSource = source
 	}
 	obs.Observed = obs.End.Sub(*run.TaskStartTime)
 	baseline, found := historicalByJob[node.JobName]

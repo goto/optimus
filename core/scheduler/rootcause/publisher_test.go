@@ -884,6 +884,62 @@ func TestPublisher_Evaluate(t *testing.T) {
 	})
 }
 
+func TestPublisher_LostTaskEndCallback(t *testing.T) {
+	// the shape of the 2026-11-23 incident: the task-level success callback was lost, so
+	// task_run kept status "running" with a NULL end, while the dag run itself was marked
+	// success a minute later. The run summary now falls back to the dag-run end, so a run
+	// that finished in ~1 minute must not read as hours of runtime.
+	referenceTime := testBaseTime.Add(3 * time.Hour)
+	targetBaseline := 2 * time.Hour
+
+	t.Run("a run whose dag-run end is terminal must not alert as still running", func(t *testing.T) {
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), nil, "success")
+		// the task end is missing, but the dag run closed 55s after the task started
+		upstreamRun.JobEndTime = ptr(testBaseTime.Add(-time.Hour + 55*time.Second))
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_upstream": 52 * time.Second,
+			"job_target":   targetBaseline,
+		}
+
+		detections := eval(target, historical, referenceTime)
+		assert.Empty(t, detectionsByReason(detections, scheduler.TierRuntimeDelay),
+			"55s observed against a 52s baseline induces 3s, far below the 30m threshold")
+	})
+
+	t.Run("a finished run measured by its dag-run end still alerts when genuinely slow", func(t *testing.T) {
+		// task ended 45m after its 10m baseline, and the dag run recorded that end
+		upstreamRun := makeRun("job_upstream", testBaseTime.Add(-time.Hour),
+			ptr(testBaseTime.Add(-time.Hour)), nil, "success")
+		upstreamRun.JobEndTime = ptr(testBaseTime.Add(-15 * time.Minute))
+		targetRun := makeRun("job_target", testBaseTime,
+			ptr(testBaseTime.Add(time.Hour)), nil, "running")
+		target := makeLineage("job_target", testTenant, targetRun,
+			makeLineage("job_upstream", testTenant, upstreamRun))
+
+		historical := map[scheduler.JobName]time.Duration{
+			"job_upstream": 10 * time.Minute,
+			"job_target":   targetBaseline,
+		}
+
+		detections := eval(target, historical, referenceTime)
+		matched := detectionsByReason(detections, scheduler.TierRuntimeDelay)
+		assert.Len(t, matched, 1)
+		assert.True(t, matched[0].Reason.IsJobFinished)
+		evidence := matched[0].Reason.Evidence
+		require.NotNil(t, evidence)
+		require.NotNil(t, evidence.Runtime)
+		component := evidence.Runtime.CalculationComponents[0]
+		assert.Equal(t, testBaseTime.Add(-15*time.Minute).UTC(), *component.End,
+			"the dag-run end stands in for the lost task end")
+	})
+}
+
 // TestPublisher_InferredBreachGate covers the potential-first contract: the caller gates
 // on the Finding, and an unexplained breach is AGGRESSIVE_SLA only when the target is its
 // own origin and past its SLA.

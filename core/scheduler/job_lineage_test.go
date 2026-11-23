@@ -948,6 +948,104 @@ func TestJobRunSummary_IsFinished(t *testing.T) {
 	})
 }
 
+func TestJobRunSummary_DagRunEndFallback(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	taskStart := baseTime.Add(5 * time.Minute)
+	taskEnd := baseTime.Add(20 * time.Minute)
+	hookStart := baseTime.Add(21 * time.Minute)
+	jobEnd := baseTime.Add(22 * time.Minute)
+
+	t.Run("should treat a terminal dag run as finished when the task end callback was lost", func(t *testing.T) {
+		// the shape of the 2026-11-23 incident: task_run stuck at running with a NULL end
+		// while the dag run itself was marked success
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateSuccess.String(),
+			JobEndTime:    &jobEnd,
+			TaskStartTime: &taskStart,
+		}
+		assert.Equal(t, &jobEnd, run.GetActualEndTime())
+		assert.True(t, run.IsFinished())
+		assert.Equal(t, scheduler.StateSuccess, run.GetState())
+	})
+
+	t.Run("should treat a failed dag run as finished when the task end callback was lost", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateFailed.String(),
+			JobEndTime:    &jobEnd,
+			TaskStartTime: &taskStart,
+		}
+		assert.Equal(t, &jobEnd, run.GetActualEndTime())
+		assert.True(t, run.IsFinished())
+		assert.Equal(t, scheduler.StateFailed, run.GetState())
+	})
+
+	t.Run("should ignore a stale dag-run end while the run is not terminal", func(t *testing.T) {
+		// job_run.end_time of a previous execution must not leak into a run that is
+		// running again (e.g. after a clear/rerun)
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateRunning.String(),
+			JobEndTime:    &jobEnd,
+			TaskStartTime: &taskStart,
+		}
+		assert.Nil(t, run.GetActualEndTime())
+		assert.False(t, run.IsFinished())
+		assert.Equal(t, scheduler.StateRunning, run.GetState())
+	})
+
+	t.Run("should not fall back when the dag-run status is unknown or blank", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{ScheduledAt: baseTime, JobEndTime: &jobEnd}
+		assert.Nil(t, run.GetActualEndTime())
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should not fall back when the dag-run status is terminal but there is no end time", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateSuccess.String(),
+			TaskStartTime: &taskStart,
+		}
+		assert.Nil(t, run.GetActualEndTime())
+		assert.False(t, run.IsFinished())
+	})
+
+	t.Run("should let the dag-run end stand in when a hook never reported and the task has no end", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateSuccess.String(),
+			JobEndTime:    &jobEnd,
+			TaskStartTime: &taskStart,
+			HookStartTime: &hookStart,
+		}
+		assert.Equal(t, &jobEnd, run.GetActualEndTime())
+		assert.True(t, run.IsFinished())
+	})
+
+	t.Run("should keep treating a recorded task end plus a running hook as unfinished", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateFailed.String(),
+			JobEndTime:    &jobEnd,
+			TaskEndTime:   &taskEnd,
+			HookStartTime: &hookStart,
+		}
+		assert.False(t, run.IsFinished(), "the hook may still be writing back state")
+	})
+
+	t.Run("should keep preferring operator ends over the dag-run end", func(t *testing.T) {
+		run := &scheduler.JobRunSummary{
+			ScheduledAt:   baseTime,
+			JobStatus:     scheduler.StateSuccess.String(),
+			JobEndTime:    &jobEnd,
+			TaskStartTime: &taskStart,
+			TaskEndTime:   &taskEnd,
+		}
+		assert.Equal(t, &taskEnd, run.GetActualEndTime())
+	})
+}
+
 func TestJobRunSummary_GetState(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
 	sensorStart := baseTime.Add(1 * time.Minute)

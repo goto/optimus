@@ -711,7 +711,9 @@ func (h JobRunHandler) JobExpectedCompletionTimeReport(ctx context.Context, req 
 		response.Details = append(response.Details, detail)
 	}
 
-	response.Summary.MaxExpectedCompletionTime = timestamppb.New(report.Summary.MaxExpectedCompletionTime)
+	if !report.Summary.MaxExpectedCompletionTime.IsZero() {
+		response.Summary.MaxExpectedCompletionTime = timestamppb.New(report.Summary.MaxExpectedCompletionTime)
+	}
 	if report.Summary.MeanDelay != nil {
 		response.Summary.MeanDelay = durationpb.New(*report.Summary.MeanDelay)
 	}

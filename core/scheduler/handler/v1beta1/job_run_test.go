@@ -1391,6 +1391,7 @@ func TestJobRunHandler(t *testing.T) {
 				assert.Empty(t, resp.Details)
 				if assert.NotNil(t, resp.Summary) {
 					assert.Nil(t, resp.Summary.MeanDelay)
+					assert.Nil(t, resp.Summary.MaxExpectedCompletionTime)
 				}
 			}
 		})

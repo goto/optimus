@@ -667,12 +667,6 @@ SELECT
 	so.job_name,
 	so.scheduled_at,
 	so.job_start_time,
-	-- A task/hook end callback can be lost while the dag-run success/fail callback landed:
-	-- task_run/hook_run then keep status "running" with a NULL end forever, which made the
-	-- whole engine read the run as still running (and alert "RUNTIME_DELAY" on a run that
-	// finished in a minute). Fall back to the dag run's own end time when its status is
-	-- terminal; a non-terminal status (e.g. running again after a clear/rerun) keeps the
-	-- stale end out of the picture.
 	COALESCE(
 		so.hook_end_time,
 		so.task_end_time,

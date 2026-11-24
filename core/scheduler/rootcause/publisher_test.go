@@ -937,6 +937,8 @@ func TestPublisher_LostTaskEndCallback(t *testing.T) {
 		component := evidence.Runtime.CalculationComponents[0]
 		assert.Equal(t, testBaseTime.Add(-15*time.Minute).UTC(), *component.End,
 			"the dag-run end stands in for the lost task end")
+		assert.Equal(t, scheduler.EvidenceSourceJobRunEnd, component.EndSource,
+			"the evidence must show the end came from the dag run, not the task callback")
 	})
 }
 

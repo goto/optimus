@@ -721,11 +721,32 @@ type JobRunSummary struct {
 	HookAttempts int
 }
 
+// GetActualEndTime returns when the run finished: hook end, else task end, else — when
+// the task/hook end callback was lost but the dag run itself reached a terminal state —
+// the dag run's own end time. The dag-run fallback keeps a lost task callback from making
+// a finished run look like it is still running; a non-terminal job status (e.g. running
+// again after a clear/rerun) must never activate the stale dag-run end, so it returns nil
+// in that case.
 func (j *JobRunSummary) GetActualEndTime() *time.Time {
 	if j.HookEndTime != nil {
 		return j.HookEndTime
 	}
-	return j.TaskEndTime
+	if j.TaskEndTime != nil {
+		return j.TaskEndTime
+	}
+	if j.JobEndTime != nil && jobStatusIsTerminal(j.JobStatus) {
+		return j.JobEndTime
+	}
+	return nil
+}
+
+// jobStatusIsTerminal reports whether the stored dag-run status text is success or failed.
+func jobStatusIsTerminal(status string) bool {
+	if status == "" {
+		return false
+	}
+	state, err := StateFromString(status)
+	return err == nil && state.IsTerminal()
 }
 
 func (j *JobRunSummary) IsFinished() bool {
@@ -733,7 +754,12 @@ func (j *JobRunSummary) IsFinished() bool {
 		return false
 	}
 
-	if j.HookStartTime != nil && j.HookEndTime == nil {
+	// the hook started but has no end: normally the run is still going, unless the dag run
+	// itself already reached a terminal state with no operator end at all — then the dag
+	// run's end stands in for the callbacks that never arrived (see GetActualEndTime). A
+	// recorded task end plus a running hook is the ordinary hook-in-flight case and stays
+	// "not finished".
+	if j.HookStartTime != nil && j.HookEndTime == nil && (j.TaskEndTime != nil || !jobStatusIsTerminal(j.JobStatus)) {
 		return false
 	}
 

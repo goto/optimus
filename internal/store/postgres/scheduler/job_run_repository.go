@@ -667,7 +667,11 @@ SELECT
 	so.job_name,
 	so.scheduled_at,
 	so.job_start_time,
-	COALESCE(so.hook_end_time, so.task_end_time) AS job_end_time,
+	COALESCE(
+		so.hook_end_time,
+		so.task_end_time,
+		CASE WHEN so.job_status IN ('success', 'failed') THEN so.job_end_time END
+	) AS job_end_time,
 	so.job_status,
 	so.sensor_start_time,
 	so.sensor_end_time,

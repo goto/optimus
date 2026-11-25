@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/goto/optimus/core/resource"
 	"github.com/goto/optimus/core/tenant"
@@ -604,14 +605,18 @@ func toResourceProto(res *resource.Resource) (*pb.ResourceSpecification, error) 
 		return nil, errors.InvalidArgument(resource.EntityResource, "unable to convert spec to proto struct")
 	}
 
-	return &pb.ResourceSpecification{
+	spec := pb.ResourceSpecification{
 		Version: meta.Version,
 		Name:    res.FullName(),
 		Type:    res.Kind(),
 		Spec:    pbStruct,
 		Assets:  nil,
 		Labels:  meta.Labels,
-	}, nil
+	}
+	if !res.GetCreatedAt().IsZero() {
+		spec.CreatedAt = timestamppb.New(res.GetCreatedAt())
+	}
+	return &spec, nil
 }
 
 func raiseResourceDatastoreEventMetric(jobTenant tenant.Tenant, datastoreName, resourceKind, state string) {

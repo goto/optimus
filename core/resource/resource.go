@@ -123,6 +123,7 @@ type Resource struct {
 	metadata *Metadata
 
 	status    Status
+	createdAt time.Time
 	updatedAt time.Time
 }
 
@@ -139,6 +140,14 @@ func (r *Resource) GetUpdateAt() time.Time {
 
 func (r *Resource) SetUpdateAt(t time.Time) {
 	r.updatedAt = t
+}
+
+func (r *Resource) GetCreatedAt() time.Time {
+	return r.createdAt
+}
+
+func (r *Resource) SetCreatedAt(t time.Time) {
+	r.createdAt = t
 }
 
 func NewResource(fullName, kind string, store Store, tnnt tenant.Tenant, meta *Metadata, spec map[string]any) (*Resource, error) {

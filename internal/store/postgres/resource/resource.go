@@ -79,5 +79,6 @@ func FromModelToResource(r *Resource) (*resource.Resource, error) {
 		output.UpdateURN(urn)
 	}
 	output.SetUpdateAt(r.UpdatedAt)
+	output.SetCreatedAt(r.CreatedAt)
 	return output, err
 }

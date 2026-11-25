@@ -830,6 +830,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "title": "ResourceSpecification are datastore specification representation of a resource"

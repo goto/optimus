@@ -386,6 +386,54 @@ func TestResourceHandler(t *testing.T) {
 			assert.Equal(t, 1, len(res.Resources))
 			assert.Equal(t, "projectA.schemaA", res.Resources[0].Name)
 		})
+		t.Run("returns created_at when the resource has one", func(t *testing.T) {
+			spec := map[string]any{"a": "b"}
+			createdAt := time.Date(2026, 11, 25, 7, 0, 0, 0, time.UTC)
+			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
+				&resource.Metadata{}, spec)
+			assert.Nil(t, err)
+			dbRes.SetCreatedAt(createdAt)
+
+			service := new(resourceService)
+			service.On("GetAll", ctx, resource.Bigquery, mock.Anything).Return([]*resource.Resource{dbRes}, nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				NamespaceName: "ns",
+			}
+
+			res, err := handler.ListResourceSpecification(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(res.Resources))
+			assert.True(t, res.Resources[0].CreatedAt.AsTime().Equal(createdAt))
+		})
+		t.Run("returns empty created_at when the resource has none", func(t *testing.T) {
+			spec := map[string]any{"a": "b"}
+			dbRes, err := resource.NewResource("proj.set.table", "table", resource.Bigquery, tnnt,
+				&resource.Metadata{}, spec)
+			assert.Nil(t, err)
+
+			service := new(resourceService)
+			service.On("GetAll", ctx, resource.Bigquery, mock.Anything).Return([]*resource.Resource{dbRes}, nil)
+			defer service.AssertExpectations(t)
+
+			handler := v1beta1.NewResourceHandler(logger, service, nil)
+
+			req := &pb.ListResourceSpecificationRequest{
+				ProjectName:   "proj",
+				DatastoreName: "bigquery",
+				NamespaceName: "ns",
+			}
+
+			res, err := handler.ListResourceSpecification(ctx, req)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(res.Resources))
+			assert.Nil(t, res.Resources[0].CreatedAt)
+		})
 	})
 	t.Run("CreateResource", func(t *testing.T) {
 		t.Run("returns error when tenant is invalid", func(t *testing.T) {
